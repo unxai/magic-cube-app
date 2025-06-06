@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="32" height="32" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- 背景渐变 -->
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#667eea" />
+      <stop offset="100%" style="stop-color:#764ba2" />
+    </linearGradient>
+    <!-- 魔方顶面渐变 -->
+    <linearGradient id="cube1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#f093fb" />
+      <stop offset="100%" style="stop-color:#f5576c" />
+    </linearGradient>
+    <!-- 魔方右面渐变 -->
+    <linearGradient id="cube2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#4facfe" />
+      <stop offset="100%" style="stop-color:#00f2fe" />
+    </linearGradient>
+    <!-- 魔方左面渐变 -->
+    <linearGradient id="cube3" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#a8edea" />
+      <stop offset="100%" style="stop-color:#fed6e3" />
+    </linearGradient>
+  </defs>
+  
+  <!-- 背景圆角矩形 -->
+  <rect width="32" height="32" rx="8" fill="url(#bg)"/>
+  
+  <!-- 魔方主体 -->
+  <g transform="translate(16,16)">
+    <!-- 魔方顶面 -->
+    <path d="M -7,-4 L 0,-9 L 7,-4 L 0,1 Z" fill="url(#cube1)" stroke="#fff" stroke-width="0.5"/>
+    
+    <!-- 魔方左面 -->
+    <path d="M -7,-4 L 0,1 L 0,9 L -7,4 Z" fill="url(#cube3)" stroke="#fff" stroke-width="0.5"/>
+    
+    <!-- 魔方右面 -->
+    <path d="M 0,1 L 7,-4 L 7,4 L 0,9 Z" fill="url(#cube2)" stroke="#fff" stroke-width="0.5"/>
+    
+    <!-- 魔方网格线（简化） -->
+    <g stroke="#fff" stroke-width="0.3" opacity="0.6">
+      <!-- 顶面中线 -->
+      <line x1="-3.5" y1="-6.5" x2="3.5" y2="-1.5"/>
+      <!-- 左面中线 -->
+      <line x1="-3.5" y1="-0.5" x2="-3.5" y2="6.5"/>
+      <!-- 右面中线 -->
+      <line x1="3.5" y1="-0.5" x2="3.5" y2="6.5"/>
+    </g>
+    
+    <!-- 中心高光 -->
+    <circle cx="0" cy="1" r="1.5" fill="#fff" opacity="0.8"/>
+  </g>
+</svg>

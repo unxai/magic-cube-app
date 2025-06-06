@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- 背景渐变 -->
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#667eea" />
+      <stop offset="100%" style="stop-color:#764ba2" />
+    </linearGradient>
+    <!-- 魔方顶面渐变 -->
+    <linearGradient id="cube1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#f093fb" />
+      <stop offset="100%" style="stop-color:#f5576c" />
+    </linearGradient>
+    <!-- 魔方右面渐变 -->
+    <linearGradient id="cube2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#4facfe" />
+      <stop offset="100%" style="stop-color:#00f2fe" />
+    </linearGradient>
+    <!-- 魔方左面渐变 -->
+    <linearGradient id="cube3" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#a8edea" />
+      <stop offset="100%" style="stop-color:#fed6e3" />
+    </linearGradient>
+  </defs>
+  
+  <!-- 背景圆形 -->
+  <circle cx="512" cy="512" r="480" fill="url(#bg)"/>
+  
+  <!-- 魔方主体 -->
+  <g transform="translate(512,512)">
+    <!-- 魔方顶面 -->
+    <path d="M -120,-80 L 0,-160 L 120,-80 L 0,0 Z" fill="url(#cube1)" stroke="#fff" stroke-width="6"/>
+    
+    <!-- 魔方左面 -->
+    <path d="M -120,-80 L 0,0 L 0,160 L -120,80 Z" fill="url(#cube3)" stroke="#fff" stroke-width="6"/>
+    
+    <!-- 魔方右面 -->
+    <path d="M 0,0 L 120,-80 L 120,80 L 0,160 Z" fill="url(#cube2)" stroke="#fff" stroke-width="6"/>
+    
+    <!-- 魔方网格线 -->
+    <g stroke="#fff" stroke-width="3" opacity="0.7">
+      <!-- 顶面网格 -->
+      <line x1="-40" y1="-107" x2="40" y2="-53"/>
+      <line x1="-80" y1="-133" x2="80" y2="-27"/>
+      <line x1="-40" y1="-53" x2="0" y2="-80"/>
+      <line x1="40" y1="-53" x2="0" y2="-80"/>
+      
+      <!-- 左面网格 -->
+      <line x1="-80" y1="-27" x2="-80" y2="27"/>
+      <line x1="-40" y1="-53" x2="-40" y2="53"/>
+      <line x1="-80" y1="27" x2="-40" y2="107"/>
+      <line x1="-40" y1="53" x2="0" y2="80"/>
+      
+      <!-- 右面网格 -->
+      <line x1="80" y1="-27" x2="80" y2="27"/>
+      <line x1="40" y1="-53" x2="40" y2="53"/>
+      <line x1="80" y1="27" x2="40" y2="107"/>
+      <line x1="40" y1="53" x2="0" y2="80"/>
+    </g>
+    
+    <!-- 中心高光 -->
+    <circle cx="0" cy="0" r="12" fill="#fff" opacity="0.9"/>
+    
+    <!-- 装饰元素 -->
+    <g fill="#fff" opacity="0.6">
+      <!-- 星星装饰 -->
+      <path d="M -160,-120 L -150,-140 L -140,-120 L -160,-110 L -180,-120 Z"/>
+      <path d="M 160,-40 L 170,-50 L 180,-40 L 170,-30 L 160,-40 Z"/>
+      <circle cx="-180" cy="120" r="6"/>
+      <circle cx="170" cy="140" r="4"/>
+      
+      <!-- 小方块装饰 -->
+      <rect x="-200" y="-60" width="8" height="8" rx="2"/>
+      <rect x="190" y="60" width="6" height="6" rx="1"/>
+    </g>
+  </g>
+</svg>
