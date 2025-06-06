@@ -26,7 +26,6 @@ interface ElasticsearchConnection {
 function createElasticsearchClient(connection: ElasticsearchConnection): Client {
   const { host, port, protocol, username, password, apiKey } = connection
   const node = `${protocol}://${host}:${port}`
-  console.info('Elasticsearch 客户端创建:', node)
   
   const auth: any = {}
   if (username && password) {
@@ -261,9 +260,13 @@ ipcMain.handle('elasticsearch:execute-query', async (_event, connection: Elastic
     const client = createElasticsearchClient(connection)
     const result = await client.search({
       index,
-      body: queryBody
+      ...queryBody // 直接展开查询对象，而不是放在 body 中
     })
-    return result
+    return {
+      hits: result.hits.hits,
+      total: result.hits.total,
+      took: result.took
+    }
   } catch (error) {
     throw new Error('执行查询失败: ' + (error instanceof Error ? error.message : '未知错误'))
   }

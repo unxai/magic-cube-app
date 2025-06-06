@@ -423,11 +423,14 @@ export const useElasticsearchStore = create<ElasticsearchStore>()(
             throw new Error('未连接到 Elasticsearch')
           }
           
+          // 确保 queryBody 是对象类型
+          const queryObject = typeof queryBody === 'string' ? JSON.parse(queryBody) : queryBody
+          
           const elasticsearchAPI = getElasticsearchAPI()
-          const result = await elasticsearchAPI.executeQuery(connection, index, queryBody)
+          const result = await elasticsearchAPI.executeQuery(connection, index, queryObject)
           
           // 添加到查询历史
-          get().addToHistory(JSON.stringify(queryBody, null, 2), index, result)
+          get().addToHistory(JSON.stringify(queryObject, null, 2), index, result)
           
           return result
         } catch (error) {

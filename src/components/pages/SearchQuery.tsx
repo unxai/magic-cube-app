@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels'
-import { Search, Play, Save, History, Edit, Trash2, MoreHorizontal, Copy, Download, Filter, RefreshCw } from 'lucide-react'
+import { Search, Play, Save, History, Edit, Trash2, MoreHorizontal, Copy, Download, Filter, RefreshCw, ChevronUp, ChevronDown, ChevronsUpDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react'
 import { useElasticsearchStore } from '@/stores/elasticsearch-store'
 import { useToast } from '@/hooks/use-toast'
 
@@ -48,6 +48,23 @@ interface QueryResult {
 }
 
 /**
+ * 排序配置接口
+ */
+interface SortConfig {
+  field: string
+  direction: 'asc' | 'desc'
+}
+
+/**
+ * 分页配置接口
+ */
+interface PaginationConfig {
+  currentPage: number
+  pageSize: number
+  totalItems: number
+}
+
+/**
  * 搜索查询页面组件
  * 提供 Elasticsearch 查询构建、执行和管理功能
  */
@@ -63,7 +80,7 @@ export function SearchQuery() {
   const [viewMode, setViewMode] = useState<'json' | 'table'>('json')
   const [editingDocument, setEditingDocument] = useState<any>(null)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
-  
+
   // 查询模板管理
   const [queryTemplates, setQueryTemplates] = useState<QueryTemplate[]>([])
   const [selectedTemplate, setSelectedTemplate] = useState<QueryTemplate | null>(null)
@@ -74,10 +91,10 @@ export function SearchQuery() {
     description: '',
     tags: ''
   })
-  
+
   // 查询历史
   const [queryResults, setQueryResults] = useState<QueryResult[]>([])
-  
+
   // 筛选器状态
   const [filterDialogOpen, setFilterDialogOpen] = useState(false)
   const [filterForm, setFilterForm] = useState({
@@ -85,7 +102,20 @@ export function SearchQuery() {
     operator: 'match',
     value: ''
   })
-  
+
+  // 分页状态
+  const [pagination, setPagination] = useState<PaginationConfig>({
+    currentPage: 1,
+    pageSize: 20,
+    totalItems: 0
+  })
+
+  // 排序状态
+  const [sortConfig, setSortConfig] = useState<SortConfig | null>(null)
+
+  // 可排序字段配置（基于字段类型判断）
+  const [sortableFields, setSortableFields] = useState<Set<string>>(new Set())
+
   const { indices, executeQuery, getIndexMapping } = useElasticsearchStore()
   const { toast } = useToast()
 
@@ -103,13 +133,21 @@ export function SearchQuery() {
    */
   useEffect(() => {
     if (selectedIndex) {
+      // 重置分页状态
+      setPagination({
+        currentPage: 1,
+        pageSize: 20,
+        totalItems: 0
+      })
+      // 重置排序状态
+      setSortConfig(null)
       initializeDefaultQuery()
     }
   }, [selectedIndex])
 
   /**
    * 初始化默认查询
-   * 智能检查索引映射，如果存在@timestamp字段则添加排序
+   * 智能检查索引映射，如果存在@timestamp字段则添加排序，并检测可排序字段
    */
   const initializeDefaultQuery = async () => {
     const defaultQuery: any = {
@@ -120,19 +158,41 @@ export function SearchQuery() {
       from: 0
     }
 
-    // 如果选择了索引，尝试检查是否有@timestamp字段
+    // 如果选择了索引，尝试检查映射信息
     if (selectedIndex) {
       try {
         const mapping = await getIndexMapping(selectedIndex)
-        
-        // 检查映射中是否存在@timestamp字段
+
+        // 检查映射中的字段类型，确定可排序字段
         const indexMapping = mapping[selectedIndex]?.mappings?.properties
-        if (indexMapping && indexMapping['@timestamp']) {
-          defaultQuery.sort = [{ "@timestamp": { "order": "desc" } }]
+        if (indexMapping) {
+          const sortableFieldsSet = new Set<string>()
+
+          // 遍历字段，检查哪些字段支持排序
+          Object.entries(indexMapping).forEach(([fieldName, fieldConfig]: [string, any]) => {
+            const fieldType = fieldConfig.type
+            // 支持排序的字段类型
+            if (['date', 'long', 'integer', 'short', 'byte', 'double', 'float', 'keyword'].includes(fieldType)) {
+              sortableFieldsSet.add(fieldName)
+            }
+            // text字段如果有keyword子字段也支持排序
+            if (fieldType === 'text' && fieldConfig.fields?.keyword) {
+              sortableFieldsSet.add(`${fieldName}.keyword`)
+            }
+          })
+
+          setSortableFields(sortableFieldsSet)
+
+          // 如果存在@timestamp字段，默认按时间倒序排序
+          if (indexMapping['@timestamp']) {
+            defaultQuery.sort = [{ "@timestamp": { "order": "desc" } }]
+            setSortConfig({ field: '@timestamp', direction: 'desc' })
+          }
         }
       } catch (error) {
         // 如果获取映射失败，使用不带排序的默认查询
         console.warn('无法获取索引映射，使用默认查询:', error)
+        setSortableFields(new Set())
       }
     }
 
@@ -195,8 +255,10 @@ export function SearchQuery() {
 
   /**
    * 执行查询
+   * @param resetPagination 是否重置分页到第一页
+   * @param customPagination 自定义分页配置，如果提供则忽略 resetPagination 参数
    */
-  const handleExecuteQuery = async () => {
+  const handleExecuteQuery = async (resetPagination = true, customPagination?: PaginationConfig) => {
     if (!selectedIndex || !queryBody.trim()) {
       toast({
         title: '参数错误',
@@ -208,44 +270,97 @@ export function SearchQuery() {
 
     setIsLoading(true)
     const startTime = Date.now()
-    
+
     try {
       // 解析查询体
-      const parsedQuery = JSON.parse(queryBody)
+      let parsedQuery = JSON.parse(queryBody)
+      
+      console.log('=== 查询执行调试信息 ===')
+      console.log('选择的索引:', selectedIndex)
+      console.log('原始查询体:', queryBody)
+      console.log('解析后的查询:', parsedQuery)
+      console.log('重置分页:', resetPagination)
+      console.log('自定义分页配置:', customPagination)
+      console.log('当前分页状态:', pagination)
+      console.log('排序配置:', sortConfig)
+      
+      // 确定使用的分页配置
+      let effectivePagination: PaginationConfig
+      
+      if (customPagination) {
+        // 使用自定义分页配置
+        effectivePagination = customPagination
+        setPagination(customPagination)
+        console.log('使用自定义分页配置:', effectivePagination)
+      } else if (resetPagination) {
+        // 重置分页，回到第一页
+        effectivePagination = { ...pagination, currentPage: 1 }
+        setPagination(prev => ({ ...prev, currentPage: 1 }))
+        console.log('重置分页到第一页:', effectivePagination)
+      } else {
+        // 使用当前分页设置
+        effectivePagination = pagination
+        console.log('使用当前分页设置:', effectivePagination)
+      }
+      
+      // 应用分页参数到查询
+      parsedQuery.from = (effectivePagination.currentPage - 1) * effectivePagination.pageSize
+      parsedQuery.size = effectivePagination.pageSize
+      console.log('最终分页参数 - from:', parsedQuery.from, 'size:', parsedQuery.size)
+      
+      // 应用排序配置
+      if (sortConfig) {
+        parsedQuery.sort = [{ [sortConfig.field]: { order: sortConfig.direction } }]
+        console.log('应用排序:', parsedQuery.sort)
+      }
+      
+      console.log('最终查询体:', JSON.stringify(parsedQuery, null, 2))
+      
+      // 更新查询体显示
+      setQueryBody(JSON.stringify(parsedQuery, null, 2))
       
       // 执行查询
+      console.log('开始执行查询...')
       const result = await executeQuery(selectedIndex, parsedQuery)
+      console.log('查询结果:', result)
       const duration = Date.now() - startTime
-      
+
       // 更新结果
-      setResults(result.hits?.hits || [])
-      setTotalHits(result.hits?.total?.value || result.hits?.total || 0)
+      setResults(result.hits || [])
+      const totalHits = result.total?.value || 0
+      setTotalHits(totalHits)
       setQueryDuration(duration)
-      
+
+      // 更新分页信息
+      setPagination(prev => ({
+        ...prev,
+        totalItems: totalHits
+      }))
+
       // 保存到历史记录
       const queryResult: QueryResult = {
         id: Date.now().toString(),
         templateId: selectedTemplate?.id,
         index: selectedIndex,
-        queryBody,
+        queryBody: JSON.stringify(parsedQuery, null, 2),
         results: result,
         executedAt: new Date().toISOString(),
         duration,
-        totalHits: result.hits?.total?.value || result.hits?.total || 0,
+        totalHits,
         status: 'success'
       }
-      
+
       const updatedResults = [queryResult, ...queryResults]
       saveQueryResults(updatedResults)
-      
+
       toast({
         title: '查询成功',
-        description: `找到 ${queryResult.totalHits} 条记录，耗时 ${duration}ms`
+        description: `找到 ${totalHits} 条记录，耗时 ${duration}ms`
       })
-      
+
     } catch (error: any) {
       console.error('查询执行失败:', error)
-      
+
       // 保存错误记录
       const queryResult: QueryResult = {
         id: Date.now().toString(),
@@ -258,10 +373,10 @@ export function SearchQuery() {
         status: 'error',
         errorMessage: error.message || '查询执行失败'
       }
-      
+
       const updatedResults = [queryResult, ...queryResults]
       saveQueryResults(updatedResults)
-      
+
       toast({
         title: '查询失败',
         description: error.message || '查询执行失败',
@@ -289,13 +404,13 @@ export function SearchQuery() {
     try {
       // 这里需要调用Elasticsearch的更新API
       // 暂时只更新本地状态
-      const updatedResults = results.map(result => 
+      const updatedResults = results.map(result =>
         result._id === editingDocument._id ? editingDocument : result
       )
       setResults(updatedResults)
       setIsEditDialogOpen(false)
       setEditingDocument(null)
-      
+
       toast({
         title: '文档更新成功',
         description: `文档 ${editingDocument._id} 已更新`
@@ -319,7 +434,7 @@ export function SearchQuery() {
       const updatedResults = results.filter(result => result._id !== documentId)
       setResults(updatedResults)
       setTotalHits(totalHits - 1)
-      
+
       toast({
         title: '文档删除成功',
         description: `文档 ${documentId} 已删除`
@@ -338,10 +453,109 @@ export function SearchQuery() {
    */
   const getTableColumns = () => {
     if (results.length === 0) return []
-    
+
     const firstDoc = results[0]._source
     const columns = Object.keys(firstDoc)
     return ['_id', '_score', ...columns]
+  }
+
+  /**
+   * 处理表格排序
+   */
+  const handleSort = (field: string) => {
+    // 检查字段是否支持排序
+    const sortableField = sortableFields.has(field) ? field :
+      sortableFields.has(`${field}.keyword`) ? `${field}.keyword` : null
+
+    if (!sortableField) {
+      toast({
+        title: '排序不支持',
+        description: `字段 "${field}" 不支持排序`,
+        variant: 'destructive'
+      })
+      return
+    }
+
+    let newDirection: 'asc' | 'desc' = 'asc'
+
+    // 如果当前已经按这个字段排序，则切换方向
+    if (sortConfig && sortConfig.field === sortableField) {
+      newDirection = sortConfig.direction === 'asc' ? 'desc' : 'asc'
+    }
+
+    setSortConfig({ field: sortableField, direction: newDirection })
+
+    // 重新执行查询
+    setTimeout(() => {
+      handleExecuteQuery(false)
+    }, 100)
+  }
+
+  /**
+   * 获取排序图标
+   */
+  const getSortIcon = (field: string) => {
+    const sortableField = sortableFields.has(field) ? field :
+      sortableFields.has(`${field}.keyword`) ? `${field}.keyword` : null
+
+    if (!sortableField) {
+      return null
+    }
+
+    if (!sortConfig || sortConfig.field !== sortableField) {
+      return <ChevronsUpDown className="h-4 w-4 text-muted-foreground" />
+    }
+
+    return sortConfig.direction === 'asc' ?
+      <ChevronUp className="h-4 w-4" /> :
+      <ChevronDown className="h-4 w-4" />
+  }
+
+  /**
+   * 处理分页变化
+   */
+  const handlePageChange = (newPage: number) => {
+    setPagination(prev => ({ ...prev, currentPage: newPage }))
+
+    // 重新执行查询
+    setTimeout(() => {
+      handleExecuteQuery(false)
+    }, 100)
+  }
+
+  /**
+   * 处理页面大小变化
+   */
+  const handlePageSizeChange = (newPageSize: number) => {
+    // 创建新的分页配置
+    const newPagination: PaginationConfig = {
+      currentPage: 1, // 重置到第一页
+      pageSize: newPageSize,
+      totalItems: pagination.totalItems
+    }
+
+    // 立即重新执行查询，使用新的分页参数
+    if (selectedIndex && queryBody.trim()) {
+      handleExecuteQuery(false, newPagination)
+    }
+  }
+
+  /**
+   * 获取分页信息
+   */
+  const getPaginationInfo = () => {
+    const { currentPage, pageSize, totalItems } = pagination
+    const totalPages = Math.ceil(totalItems / pageSize)
+    const startItem = (currentPage - 1) * pageSize + 1
+    const endItem = Math.min(currentPage * pageSize, totalItems)
+
+    return {
+      totalPages,
+      startItem,
+      endItem,
+      hasNextPage: currentPage < totalPages,
+      hasPrevPage: currentPage > 1
+    }
   }
 
   /**
@@ -391,7 +605,7 @@ export function SearchQuery() {
     setIsEditingTemplate(false)
     setSelectedTemplate(null)
     setTemplateForm({ name: '', description: '', tags: '' })
-    
+
     toast({
       title: isEditingTemplate ? '模板更新成功' : '模板保存成功',
       description: `查询模板 "${template.name}" 已保存`
@@ -404,7 +618,7 @@ export function SearchQuery() {
   const handleDeleteTemplate = (template: QueryTemplate) => {
     const updatedTemplates = queryTemplates.filter(t => t.id !== template.id)
     saveQueryTemplates(updatedTemplates)
-    
+
     toast({
       title: '模板删除成功',
       description: `查询模板 "${template.name}" 已删除`
@@ -419,7 +633,7 @@ export function SearchQuery() {
     setQueryBody(template.queryBody)
     setSelectedTemplate(template)
     setActiveTab('query')
-    
+
     toast({
       title: '模板加载成功',
       description: `已加载查询模板 "${template.name}"`
@@ -455,7 +669,7 @@ export function SearchQuery() {
 
     try {
       const currentQuery = JSON.parse(queryBody)
-      
+
       // 构建筛选器
       const filter = (() => {
         switch (filterForm.operator) {
@@ -497,12 +711,12 @@ export function SearchQuery() {
       setQueryBody(JSON.stringify(currentQuery, null, 2))
       setFilterDialogOpen(false)
       setFilterForm({ field: '', operator: 'match', value: '' })
-      
+
       toast({
         title: '筛选器添加成功',
         description: `已添加 ${filterForm.field} ${filterForm.operator} ${filterForm.value}`
       })
-      
+
     } catch (error) {
       toast({
         title: 'JSON格式错误',
@@ -547,7 +761,7 @@ export function SearchQuery() {
     const blob = new Blob([JSON.stringify(exportData, null, 2)], {
       type: 'application/json'
     })
-    
+
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
@@ -556,7 +770,7 @@ export function SearchQuery() {
     a.click()
     document.body.removeChild(a)
     URL.revokeObjectURL(url)
-    
+
     toast({
       title: '导出成功',
       description: '查询结果已导出为JSON文件'
@@ -584,7 +798,7 @@ export function SearchQuery() {
   }
 
   return (
-    <div className="h-full p-6 space-y-6">
+    <div className="h-full p-6 space-y-6 max-w-full overflow-hidden">
       {/* 页面标题 */}
       <div className="flex items-center justify-between">
         <div>
@@ -671,329 +885,566 @@ export function SearchQuery() {
 
         {/* 查询构建器 */}
         <TabsContent value="query" className="space-y-6">
-          <div className="h-[calc(100vh-280px)]">
-            <PanelGroup direction="horizontal" autoSaveId="search-query-layout">
+          <div className="flex-1 overflow-hidden">
+            <PanelGroup direction="horizontal" autoSaveId="search-query-layout" className="w-full">
               {/* 查询编辑器面板 */}
-              <Panel defaultSize={30} minSize={20} maxSize={60}>
-                <Card className="flex flex-col h-full mr-2">
-              <CardHeader>
-                <CardTitle className="flex items-center justify-between">
-                  <span className="flex items-center">
-                    <Search className="h-5 w-5 mr-2" />
-                    REST API 查询
-                  </span>
-                  <div className="flex items-center space-x-2">
-                    <Dialog open={filterDialogOpen} onOpenChange={setFilterDialogOpen}>
-                      <DialogTrigger asChild>
-                        <Button variant="outline" size="sm">
-                          <Filter className="h-4 w-4 mr-2" />
-                          添加筛选器
+              <Panel defaultSize={30} minSize={20} maxSize={50}>
+                <Card className="flex flex-col h-full">
+                  <CardHeader>
+                    <CardTitle className="flex items-center justify-between">
+                      <span className="flex items-center">
+                        <Search className="h-5 w-5 mr-2" />
+                        REST API 查询
+                      </span>
+                      <div className="flex items-center space-x-2">
+                        <Dialog open={filterDialogOpen} onOpenChange={setFilterDialogOpen}>
+                          <DialogTrigger asChild>
+                            <Button variant="outline" size="sm">
+                              <Filter className="h-4 w-4 mr-2" />
+                              添加筛选器
+                            </Button>
+                          </DialogTrigger>
+                          <DialogContent>
+                            <DialogHeader>
+                              <DialogTitle>添加筛选器</DialogTitle>
+                              <DialogDescription>
+                                添加筛选条件到当前查询
+                              </DialogDescription>
+                            </DialogHeader>
+                            <div className="space-y-4">
+                              <div className="space-y-2">
+                                <Label htmlFor="filter-field">字段名</Label>
+                                <Input
+                                  id="filter-field"
+                                  placeholder="例如: status, title, @timestamp"
+                                  value={filterForm.field}
+                                  onChange={(e) => setFilterForm(prev => ({ ...prev, field: e.target.value }))}
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <Label htmlFor="filter-operator">操作符</Label>
+                                <select
+                                  id="filter-operator"
+                                  className="w-full p-2 border rounded-md"
+                                  value={filterForm.operator}
+                                  onChange={(e) => setFilterForm(prev => ({ ...prev, operator: e.target.value }))}
+                                >
+                                  <option value="match">Match (模糊匹配)</option>
+                                  <option value="term">Term (精确匹配)</option>
+                                  <option value="range">Range (范围查询)</option>
+                                  <option value="exists">Exists (字段存在)</option>
+                                </select>
+                              </div>
+                              <div className="space-y-2">
+                                <Label htmlFor="filter-value">值</Label>
+                                <Input
+                                  id="filter-value"
+                                  placeholder="输入筛选值"
+                                  value={filterForm.value}
+                                  onChange={(e) => setFilterForm(prev => ({ ...prev, value: e.target.value }))}
+                                />
+                              </div>
+                            </div>
+                            <DialogFooter>
+                              <Button variant="outline" onClick={() => setFilterDialogOpen(false)}>
+                                取消
+                              </Button>
+                              <Button onClick={handleAddFilter}>
+                                添加筛选器
+                              </Button>
+                            </DialogFooter>
+                          </DialogContent>
+                        </Dialog>
+                        <Button variant="outline" size="sm" onClick={handleFormatQuery}>
+                          格式化
                         </Button>
-                      </DialogTrigger>
-                      <DialogContent>
-                        <DialogHeader>
-                          <DialogTitle>添加筛选器</DialogTitle>
-                          <DialogDescription>
-                            添加筛选条件到当前查询
-                          </DialogDescription>
-                        </DialogHeader>
-                        <div className="space-y-4">
-                          <div className="space-y-2">
-                            <Label htmlFor="filter-field">字段名</Label>
-                            <Input
-                              id="filter-field"
-                              placeholder="例如: status, title, @timestamp"
-                              value={filterForm.field}
-                              onChange={(e) => setFilterForm(prev => ({ ...prev, field: e.target.value }))}
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label htmlFor="filter-operator">操作符</Label>
-                            <select
-                              id="filter-operator"
-                              className="w-full p-2 border rounded-md"
-                              value={filterForm.operator}
-                              onChange={(e) => setFilterForm(prev => ({ ...prev, operator: e.target.value }))}
-                            >
-                              <option value="match">Match (模糊匹配)</option>
-                              <option value="term">Term (精确匹配)</option>
-                              <option value="range">Range (范围查询)</option>
-                              <option value="exists">Exists (字段存在)</option>
-                            </select>
-                          </div>
-                          <div className="space-y-2">
-                            <Label htmlFor="filter-value">值</Label>
-                            <Input
-                              id="filter-value"
-                              placeholder="输入筛选值"
-                              value={filterForm.value}
-                              onChange={(e) => setFilterForm(prev => ({ ...prev, value: e.target.value }))}
-                            />
-                          </div>
-                        </div>
-                        <DialogFooter>
-                          <Button variant="outline" onClick={() => setFilterDialogOpen(false)}>
-                            取消
-                          </Button>
-                          <Button onClick={handleAddFilter}>
-                            添加筛选器
-                          </Button>
-                        </DialogFooter>
-                      </DialogContent>
-                    </Dialog>
-                    <Button variant="outline" size="sm" onClick={handleFormatQuery}>
-                      格式化
+                      </div>
+                    </CardTitle>
+                    <CardDescription>
+                      直接编辑 Elasticsearch REST API 查询体
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="flex-1 space-y-4">
+                    {/* 索引选择 */}
+                    <div className="space-y-2">
+                      <Label htmlFor="index-select">目标索引</Label>
+                      <select
+                        id="index-select"
+                        className="w-full p-2 border rounded-md"
+                        value={selectedIndex}
+                        onChange={(e) => setSelectedIndex(e.target.value)}
+                      >
+                        <option value="">请选择索引</option>
+                        {indices.map((index) => (
+                          <option key={index.index} value={index.index}>
+                            {index.index} ({index.docsCount} 文档)
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* 查询体编辑器 */}
+                    <div className="space-y-2 flex-1">
+                      <Label htmlFor="query-body">查询体 (JSON)</Label>
+                      <Textarea
+                        id="query-body"
+                        className="font-mono text-sm flex-1 min-h-[300px]"
+                        placeholder="输入 Elasticsearch 查询 JSON..."
+                        value={queryBody}
+                        onChange={(e) => setQueryBody(e.target.value)}
+                      />
+                    </div>
+
+                    {/* 执行按钮 */}
+                    <Button
+                      onClick={() => handleExecuteQuery(true)}
+                      disabled={!selectedIndex || !queryBody.trim() || isLoading}
+                      className="w-full"
+                      size="lg"
+                    >
+                      <Play className="h-4 w-4 mr-2" />
+                      {isLoading ? '执行中...' : '执行查询'}
                     </Button>
-                  </div>
-                </CardTitle>
-                <CardDescription>
-                  直接编辑 Elasticsearch REST API 查询体
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="flex-1 space-y-4">
-                {/* 索引选择 */}
-                <div className="space-y-2">
-                  <Label htmlFor="index-select">目标索引</Label>
-                  <select
-                    id="index-select"
-                    className="w-full p-2 border rounded-md"
-                    value={selectedIndex}
-                    onChange={(e) => setSelectedIndex(e.target.value)}
-                  >
-                    <option value="">请选择索引</option>
-                    {indices.map((index) => (
-                      <option key={index.index} value={index.index}>
-                        {index.index} ({index.docsCount} 文档)
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* 查询体编辑器 */}
-                <div className="space-y-2 flex-1">
-                  <Label htmlFor="query-body">查询体 (JSON)</Label>
-                  <Textarea
-                    id="query-body"
-                    className="font-mono text-sm flex-1 min-h-[300px]"
-                    placeholder="输入 Elasticsearch 查询 JSON..."
-                    value={queryBody}
-                    onChange={(e) => setQueryBody(e.target.value)}
-                  />
-                </div>
-
-                {/* 执行按钮 */}
-                <Button 
-                  onClick={handleExecuteQuery}
-                  disabled={!selectedIndex || !queryBody.trim() || isLoading}
-                  className="w-full"
-                  size="lg"
-                >
-                  <Play className="h-4 w-4 mr-2" />
-                  {isLoading ? '执行中...' : '执行查询'}
-                </Button>
-              </CardContent>
+                  </CardContent>
                 </Card>
               </Panel>
-              
+
               {/* 拖拽分割线 */}
               <PanelResizeHandle className="w-2 bg-border hover:bg-accent transition-colors cursor-col-resize flex items-center justify-center">
                 <div className="w-1 h-8 bg-muted-foreground/30 rounded-full" />
               </PanelResizeHandle>
-              
+
               {/* 查询结果面板 */}
               <Panel defaultSize={70} minSize={40}>
-                <Card className="flex flex-col h-full ml-2">
-              <CardHeader>
-                <CardTitle className="flex items-center justify-between">
-                  <span>查询结果</span>
-                  <div className="flex items-center space-x-2">
-                    {/* 视图切换按钮 */}
-                    {results.length > 0 && (
-                      <div className="flex items-center space-x-1 border rounded-md p-1">
-                        <Button
-                          variant={viewMode === 'json' ? 'default' : 'ghost'}
-                          size="sm"
-                          onClick={() => setViewMode('json')}
-                        >
-                          JSON
-                        </Button>
-                        <Button
-                          variant={viewMode === 'table' ? 'default' : 'ghost'}
-                          size="sm"
-                          onClick={() => setViewMode('table')}
-                        >
-                          表格
-                        </Button>
-                      </div>
-                    )}
-                    {totalHits > 0 && (
-                      <Badge variant="secondary">
-                        {totalHits} 条记录
-                      </Badge>
-                    )}
-                    {queryDuration > 0 && (
-                      <Badge variant="outline">
-                        {queryDuration}ms
-                      </Badge>
-                    )}
-                  </div>
-                </CardTitle>
-                <CardDescription>
-                  查询执行结果和文档详情
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="flex-1">
-                <ScrollArea className="h-[calc(100vh-400px)]">
-                  {isLoading ? (
-                    <div className="flex items-center justify-center h-32">
-                      <RefreshCw className="h-6 w-6 animate-spin mr-2" />
-                      <span>执行查询中...</span>
-                    </div>
-                  ) : results.length === 0 ? (
-                    <div className="flex items-center justify-center h-32 text-muted-foreground">
-                      执行查询以查看结果
-                    </div>
-                  ) : viewMode === 'table' ? (
-                    /* 表格视图 */
-                    <div className="border rounded-md overflow-x-auto">
-                      <Table className="min-w-full">
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead className="w-12">#</TableHead>
-                            <TableHead className="w-32">文档ID</TableHead>
-                            <TableHead className="w-20">评分</TableHead>
-                            {getTableColumns().filter(col => !['_id', '_score'].includes(col)).map(column => (
-                              <TableHead key={column}>{column}</TableHead>
-                            ))}
-                            <TableHead className="w-24">操作</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {results.map((hit, index) => (
-                            <TableRow key={hit._id}>
-                              <TableCell>{index + 1}</TableCell>
-                              <TableCell className="font-mono text-xs">
-                                {hit._id.length > 12 ? `${hit._id.substring(0, 12)}...` : hit._id}
-                              </TableCell>
-                              <TableCell>{hit._score?.toFixed(2)}</TableCell>
-                              {getTableColumns().filter(col => !['_id', '_score'].includes(col)).map(column => (
-                                <TableCell key={column} className="max-w-32 truncate">
-                                  {typeof hit._source[column] === 'object' 
-                                    ? JSON.stringify(hit._source[column]).substring(0, 50) + '...' 
-                                    : String(hit._source[column] || '').substring(0, 50)
-                                  }
-                                </TableCell>
-                              ))}
-                              <TableCell>
-                                <DropdownMenu>
-                                  <DropdownMenuTrigger asChild>
-                                    <Button variant="ghost" size="sm">
-                                      <MoreHorizontal className="h-4 w-4" />
-                                    </Button>
-                                  </DropdownMenuTrigger>
-                                  <DropdownMenuContent>
-                                    <DropdownMenuItem onClick={() => handleEditDocument(hit)}>
-                                      <Edit className="h-4 w-4 mr-2" />
-                                      编辑
-                                    </DropdownMenuItem>
-                                    <DropdownMenuSeparator />
-                                    <AlertDialog>
-                                      <AlertDialogTrigger asChild>
-                                        <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-                                          <Trash2 className="h-4 w-4 mr-2" />
-                                          删除
-                                        </DropdownMenuItem>
-                                      </AlertDialogTrigger>
-                                      <AlertDialogContent>
-                                        <AlertDialogHeader>
-                                          <AlertDialogTitle>确认删除</AlertDialogTitle>
-                                          <AlertDialogDescription>
-                                            确定要删除文档 {hit._id} 吗？此操作无法撤销。
-                                          </AlertDialogDescription>
-                                        </AlertDialogHeader>
-                                        <AlertDialogFooter>
-                                          <AlertDialogCancel>取消</AlertDialogCancel>
-                                          <AlertDialogAction onClick={() => handleDeleteDocument(hit._id)}>
-                                            删除
-                                          </AlertDialogAction>
-                                        </AlertDialogFooter>
-                                      </AlertDialogContent>
-                                    </AlertDialog>
-                                  </DropdownMenuContent>
-                                </DropdownMenu>
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  ) : (
-                    /* JSON视图 */
-                    <div className="space-y-4">
-                      {results.map((hit, index) => (
-                        <div key={hit._id} className="border rounded-lg p-4">
-                          <div className="flex items-center justify-between mb-2">
-                            <div className="flex items-center space-x-2">
-                              <Badge variant="outline">#{index + 1}</Badge>
-                              <span className="font-mono text-sm text-muted-foreground">
-                                {hit._id}
-                              </span>
-                            </div>
-                            <div className="flex items-center space-x-2">
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="sm">
-                                    <MoreHorizontal className="h-4 w-4" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent>
-                                  <DropdownMenuItem onClick={() => handleEditDocument(hit)}>
-                                    <Edit className="h-4 w-4 mr-2" />
-                                    编辑
-                                  </DropdownMenuItem>
-                                  <DropdownMenuSeparator />
-                                  <AlertDialog>
-                                    <AlertDialogTrigger asChild>
-                                      <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-                                        <Trash2 className="h-4 w-4 mr-2" />
-                                        删除
-                                      </DropdownMenuItem>
-                                    </AlertDialogTrigger>
-                                    <AlertDialogContent>
-                                      <AlertDialogHeader>
-                                        <AlertDialogTitle>确认删除</AlertDialogTitle>
-                                        <AlertDialogDescription>
-                                          确定要删除文档 {hit._id} 吗？此操作无法撤销。
-                                        </AlertDialogDescription>
-                                      </AlertDialogHeader>
-                                      <AlertDialogFooter>
-                                        <AlertDialogCancel>取消</AlertDialogCancel>
-                                        <AlertDialogAction onClick={() => handleDeleteDocument(hit._id)}>
-                                          删除
-                                        </AlertDialogAction>
-                                      </AlertDialogFooter>
-                                    </AlertDialogContent>
-                                  </AlertDialog>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                              <Badge variant="secondary">
-                                Score: {hit._score?.toFixed(2)}
-                              </Badge>
-                              <Badge variant="outline">
-                                {hit._index}
-                              </Badge>
-                            </div>
+                <Card className="flex flex-col h-full flex-1 overflow-hidden">
+                  <CardHeader>
+                    <CardTitle className="flex items-center justify-between">
+                      <span>查询结果</span>
+                      <div className="flex items-center space-x-2">
+                        {/* 视图切换按钮 */}
+                        {results.length > 0 && (
+                          <div className="flex items-center space-x-1 border rounded-md p-1">
+                            <Button
+                              variant={viewMode === 'json' ? 'default' : 'ghost'}
+                              size="sm"
+                              onClick={() => setViewMode('json')}
+                            >
+                              JSON
+                            </Button>
+                            <Button
+                              variant={viewMode === 'table' ? 'default' : 'ghost'}
+                              size="sm"
+                              onClick={() => setViewMode('table')}
+                            >
+                              表格
+                            </Button>
                           </div>
-                          <Separator className="my-2" />
-                          <pre className="text-sm bg-muted p-2 rounded overflow-auto max-h-48">
-                            {JSON.stringify(hit._source, null, 2)}
-                          </pre>
+                        )}
+                        {totalHits > 0 && (
+                          <Badge variant="secondary">
+                            {totalHits} 条记录
+                          </Badge>
+                        )}
+                        {queryDuration > 0 && (
+                          <Badge variant="outline">
+                            {queryDuration}ms
+                          </Badge>
+                        )}
+                      </div>
+                    </CardTitle>
+                    <CardDescription>
+                      查询执行结果和文档详情
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="flex-1 w-full overflow-hidden">
+                    <ScrollArea className="h-[calc(100vh-400px)]">
+                      {isLoading ? (
+                        <div className="flex items-center justify-center h-32">
+                          <RefreshCw className="h-6 w-6 animate-spin mr-2" />
+                          <span>执行查询中...</span>
                         </div>
-                      ))}
-                    </div>
-                  )}
-                </ScrollArea>
-              </CardContent>
+                      ) : results.length === 0 ? (
+                        <div className="flex items-center justify-center h-32 text-muted-foreground">
+                          执行查询以查看结果
+                        </div>
+                      ) : viewMode === 'table' ? (
+                        /* 表格视图 */
+                        <div className="border rounded-md w-full">
+                          <div className="overflow-x-auto">
+                            <Table className="w-auto min-w-full">
+                              <TableHeader>
+                                <TableRow>
+                                  <TableHead className="w-12 flex-shrink-0">#</TableHead>
+                                  <TableHead className="w-32 flex-shrink-0">
+                                    <Button
+                                      variant="ghost"
+                                      className="h-auto p-0 font-semibold hover:bg-transparent"
+                                      onClick={() => handleSort('_id')}
+                                    >
+                                      文档ID
+                                      {getSortIcon('_id')}
+                                    </Button>
+                                  </TableHead>
+                                  <TableHead className="w-20 flex-shrink-0">
+                                    <Button
+                                      variant="ghost"
+                                      className="h-auto p-0 font-semibold hover:bg-transparent"
+                                      onClick={() => handleSort('_score')}
+                                    >
+                                      评分
+                                      {getSortIcon('_score')}
+                                    </Button>
+                                  </TableHead>
+                                  {getTableColumns().filter(col => !['_id', '_score'].includes(col)).map(column => (
+                                    <TableHead key={column} className="min-w-48 whitespace-nowrap">
+                                      <Button
+                                        variant="ghost"
+                                        className="h-auto p-0 font-semibold hover:bg-transparent"
+                                        onClick={() => handleSort(column)}
+                                      >
+                                        {column}
+                                        {getSortIcon(column)}
+                                      </Button>
+                                    </TableHead>
+                                  ))}
+                                  <TableHead className="w-24 flex-shrink-0">操作</TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {results.map((hit, index) => (
+                                  <TableRow key={hit._id}>
+                                    <TableCell className="flex-shrink-0">{index + 1}</TableCell>
+                                    <TableCell className="font-mono text-xs flex-shrink-0">
+                                      {hit._id.length > 12 ? `${hit._id.substring(0, 12)}...` : hit._id}
+                                    </TableCell>
+                                    <TableCell className="flex-shrink-0">{hit._score?.toFixed(2)}</TableCell>
+                                    {getTableColumns().filter(col => !['_id', '_score'].includes(col)).map(column => (
+                                      <TableCell key={column} className="min-w-48 whitespace-nowrap">
+                                        <div className="max-w-48 truncate" title={typeof hit._source[column] === 'object'
+                                          ? JSON.stringify(hit._source[column])
+                                          : String(hit._source[column] || '')}>
+                                          {typeof hit._source[column] === 'object'
+                                            ? JSON.stringify(hit._source[column]).substring(0, 50) + '...'
+                                            : String(hit._source[column] || '').substring(0, 50)
+                                          }
+                                        </div>
+                                      </TableCell>
+                                    ))}
+                                    <TableCell className="flex-shrink-0">
+                                      <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                          <Button variant="ghost" size="sm">
+                                            <MoreHorizontal className="h-4 w-4" />
+                                          </Button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent>
+                                          <DropdownMenuItem onClick={() => handleEditDocument(hit)}>
+                                            <Edit className="h-4 w-4 mr-2" />
+                                            编辑
+                                          </DropdownMenuItem>
+                                          <DropdownMenuSeparator />
+                                          <AlertDialog>
+                                            <AlertDialogTrigger asChild>
+                                              <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                                                <Trash2 className="h-4 w-4 mr-2" />
+                                                删除
+                                              </DropdownMenuItem>
+                                            </AlertDialogTrigger>
+                                            <AlertDialogContent>
+                                              <AlertDialogHeader>
+                                                <AlertDialogTitle>确认删除</AlertDialogTitle>
+                                                <AlertDialogDescription>
+                                                  确定要删除文档 {hit._id} 吗？此操作无法撤销。
+                                                </AlertDialogDescription>
+                                              </AlertDialogHeader>
+                                              <AlertDialogFooter>
+                                                <AlertDialogCancel>取消</AlertDialogCancel>
+                                                <AlertDialogAction onClick={() => handleDeleteDocument(hit._id)}>
+                                                  删除
+                                                </AlertDialogAction>
+                                              </AlertDialogFooter>
+                                            </AlertDialogContent>
+                                          </AlertDialog>
+                                        </DropdownMenuContent>
+                                      </DropdownMenu>
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          </div>
+
+                          {/* 分页控件 */}
+                          {pagination.totalItems > 0 && (() => {
+                            const paginationInfo = getPaginationInfo()
+                            return (
+                              <div className="flex items-center justify-between px-4 py-3 border-t">
+                                <div className="flex items-center space-x-2">
+                                  <span className="text-sm text-muted-foreground">
+                                    显示 {paginationInfo.startItem}-{paginationInfo.endItem} 条，共 {pagination.totalItems} 条
+                                  </span>
+                                  <div className="flex items-center space-x-2">
+                                    <Label htmlFor="page-size" className="text-sm">每页:</Label>
+                                    <select
+                                      id="page-size"
+                                      className="text-sm border rounded px-2 py-1"
+                                      value={pagination.pageSize}
+                                      onChange={(e) => handlePageSizeChange(Number(e.target.value))}
+                                    >
+                                      <option value={10}>10</option>
+                                      <option value={20}>20</option>
+                                      <option value={50}>50</option>
+                                      <option value={100}>100</option>
+                                    </select>
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center space-x-1">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handlePageChange(1)}
+                                    disabled={!paginationInfo.hasPrevPage}
+                                  >
+                                    <ChevronsLeft className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handlePageChange(pagination.currentPage - 1)}
+                                    disabled={!paginationInfo.hasPrevPage}
+                                  >
+                                    <ChevronLeft className="h-4 w-4" />
+                                  </Button>
+
+                                  <div className="flex items-center space-x-1">
+                                    {(() => {
+                                      const { totalPages } = paginationInfo
+                                      const currentPage = pagination.currentPage
+                                      const pages = []
+
+                                      // 计算显示的页码范围
+                                      let startPage = Math.max(1, currentPage - 2)
+                                      let endPage = Math.min(totalPages, currentPage + 2)
+
+                                      // 确保显示5个页码（如果总页数足够）
+                                      if (endPage - startPage < 4) {
+                                        if (startPage === 1) {
+                                          endPage = Math.min(totalPages, startPage + 4)
+                                        } else {
+                                          startPage = Math.max(1, endPage - 4)
+                                        }
+                                      }
+
+                                      for (let i = startPage; i <= endPage; i++) {
+                                        pages.push(
+                                          <Button
+                                            key={i}
+                                            variant={i === currentPage ? "default" : "outline"}
+                                            size="sm"
+                                            onClick={() => handlePageChange(i)}
+                                            className="w-8 h-8 p-0"
+                                          >
+                                            {i}
+                                          </Button>
+                                        )
+                                      }
+
+                                      return pages
+                                    })()}
+                                  </div>
+
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handlePageChange(pagination.currentPage + 1)}
+                                    disabled={!paginationInfo.hasNextPage}
+                                  >
+                                    <ChevronRight className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handlePageChange(paginationInfo.totalPages)}
+                                    disabled={!paginationInfo.hasNextPage}
+                                  >
+                                    <ChevronsRight className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              </div>
+                            )
+                          })()}
+                        </div>
+                      ) : (
+                        /* JSON视图 */
+                        <div className="space-y-4">
+                          {results.map((hit, index) => (
+                            <div key={hit._id} className="border rounded-lg p-4">
+                              <div className="flex items-center justify-between mb-2">
+                                <div className="flex items-center space-x-2">
+                                  <Badge variant="outline">#{index + 1}</Badge>
+                                  <span className="font-mono text-sm text-muted-foreground">
+                                    {hit._id}
+                                  </span>
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                  <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                      <Button variant="ghost" size="sm">
+                                        <MoreHorizontal className="h-4 w-4" />
+                                      </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent>
+                                      <DropdownMenuItem onClick={() => handleEditDocument(hit)}>
+                                        <Edit className="h-4 w-4 mr-2" />
+                                        编辑
+                                      </DropdownMenuItem>
+                                      <DropdownMenuSeparator />
+                                      <AlertDialog>
+                                        <AlertDialogTrigger asChild>
+                                          <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                                            <Trash2 className="h-4 w-4 mr-2" />
+                                            删除
+                                          </DropdownMenuItem>
+                                        </AlertDialogTrigger>
+                                        <AlertDialogContent>
+                                          <AlertDialogHeader>
+                                            <AlertDialogTitle>确认删除</AlertDialogTitle>
+                                            <AlertDialogDescription>
+                                              确定要删除文档 {hit._id} 吗？此操作无法撤销。
+                                            </AlertDialogDescription>
+                                          </AlertDialogHeader>
+                                          <AlertDialogFooter>
+                                            <AlertDialogCancel>取消</AlertDialogCancel>
+                                            <AlertDialogAction onClick={() => handleDeleteDocument(hit._id)}>
+                                              删除
+                                            </AlertDialogAction>
+                                          </AlertDialogFooter>
+                                        </AlertDialogContent>
+                                      </AlertDialog>
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
+                                  <Badge variant="secondary">
+                                    Score: {hit._score?.toFixed(2)}
+                                  </Badge>
+                                  <Badge variant="outline">
+                                    {hit._index}
+                                  </Badge>
+                                </div>
+                              </div>
+                              <Separator className="my-2" />
+                              <div className="text-sm bg-muted p-2 rounded max-h-48 overflow-y-auto">
+                                <pre className="whitespace-pre-wrap break-words overflow-hidden">
+                                  {JSON.stringify(hit._source, null, 2)}
+                                </pre>
+                              </div>
+                            </div>
+                          ))}
+
+                          {/* 分页控件 */}
+                          {pagination.totalItems > 0 && (() => {
+                            const paginationInfo = getPaginationInfo()
+                            return (
+                              <div className="flex items-center justify-between px-4 py-3 border-t">
+                                <div className="flex items-center space-x-2">
+                                  <span className="text-sm text-muted-foreground">
+                                    显示 {paginationInfo.startItem}-{paginationInfo.endItem} 条，共 {pagination.totalItems} 条
+                                  </span>
+                                  <div className="flex items-center space-x-2">
+                                    <Label htmlFor="page-size" className="text-sm">每页:</Label>
+                                    <select
+                                      id="page-size"
+                                      className="text-sm border rounded px-2 py-1"
+                                      value={pagination.pageSize}
+                                      onChange={(e) => handlePageSizeChange(Number(e.target.value))}
+                                    >
+                                      <option value={10}>10</option>
+                                      <option value={20}>20</option>
+                                      <option value={50}>50</option>
+                                      <option value={100}>100</option>
+                                    </select>
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center space-x-1">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handlePageChange(1)}
+                                    disabled={!paginationInfo.hasPrevPage}
+                                  >
+                                    <ChevronsLeft className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handlePageChange(pagination.currentPage - 1)}
+                                    disabled={!paginationInfo.hasPrevPage}
+                                  >
+                                    <ChevronLeft className="h-4 w-4" />
+                                  </Button>
+
+                                  <div className="flex items-center space-x-1">
+                                    {(() => {
+                                      const { totalPages } = paginationInfo
+                                      const currentPage = pagination.currentPage
+                                      const pages = []
+
+                                      // 计算显示的页码范围
+                                      let startPage = Math.max(1, currentPage - 2)
+                                      let endPage = Math.min(totalPages, currentPage + 2)
+
+                                      // 确保显示5个页码（如果总页数足够）
+                                      if (endPage - startPage < 4) {
+                                        if (startPage === 1) {
+                                          endPage = Math.min(totalPages, startPage + 4)
+                                        } else {
+                                          startPage = Math.max(1, endPage - 4)
+                                        }
+                                      }
+
+                                      for (let i = startPage; i <= endPage; i++) {
+                                        pages.push(
+                                          <Button
+                                            key={i}
+                                            variant={i === currentPage ? "default" : "outline"}
+                                            size="sm"
+                                            onClick={() => handlePageChange(i)}
+                                            className="w-8 h-8 p-0"
+                                          >
+                                            {i}
+                                          </Button>
+                                        )
+                                      }
+
+                                      return pages
+                                    })()}
+                                  </div>
+
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handlePageChange(pagination.currentPage + 1)}
+                                    disabled={!paginationInfo.hasNextPage}
+                                  >
+                                    <ChevronRight className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handlePageChange(paginationInfo.totalPages)}
+                                    disabled={!paginationInfo.hasNextPage}
+                                  >
+                                    <ChevronsRight className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              </div>
+                            )
+                          })()}
+                        </div>
+                      )}
+                    </ScrollArea>
+                  </CardContent>
                 </Card>
               </Panel>
             </PanelGroup>
@@ -1074,13 +1525,13 @@ export function SearchQuery() {
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </div>
-                      
+
                       {template.description && (
                         <p className="text-sm text-muted-foreground mb-2">
                           {template.description}
                         </p>
                       )}
-                      
+
                       {template.tags.length > 0 && (
                         <div className="flex flex-wrap gap-1 mb-2">
                           {template.tags.map((tag, index) => (
@@ -1090,7 +1541,7 @@ export function SearchQuery() {
                           ))}
                         </div>
                       )}
-                      
+
                       <div className="text-xs text-muted-foreground">
                         创建于 {new Date(template.createdAt).toLocaleString()}
                         {template.updatedAt !== template.createdAt && (
@@ -1115,8 +1566,8 @@ export function SearchQuery() {
                   <Badge variant="secondary">
                     {queryResults.length} 条记录
                   </Badge>
-                  <Button 
-                    variant="outline" 
+                  <Button
+                    variant="outline"
                     size="sm"
                     onClick={() => {
                       setQueryResults([])
@@ -1163,13 +1614,20 @@ export function SearchQuery() {
                           <Badge variant="outline">
                             {result.duration}ms
                           </Badge>
-                          <Button 
-                            variant="ghost" 
+                          <Button
+                            variant="ghost"
                             size="sm"
                             onClick={() => {
                               setSelectedIndex(result.index)
                               setQueryBody(result.queryBody)
                               setActiveTab('query')
+                              // 重置分页和排序状态
+                              setPagination({
+                                currentPage: 1,
+                                pageSize: 20,
+                                totalItems: 0
+                              })
+                              setSortConfig(null)
                             }}
                           >
                             <Play className="h-4 w-4 mr-2" />
@@ -1177,13 +1635,13 @@ export function SearchQuery() {
                           </Button>
                         </div>
                       </div>
-                      
+
                       {result.status === 'error' && result.errorMessage && (
                         <div className="text-sm text-red-600 mb-2">
                           错误: {result.errorMessage}
                         </div>
                       )}
-                      
+
                       <details className="text-sm">
                         <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
                           查看查询语句
@@ -1200,7 +1658,7 @@ export function SearchQuery() {
           </Card>
         </TabsContent>
       </Tabs>
-      
+
       {/* 编辑文档对话框 */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
         <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
