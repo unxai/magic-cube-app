@@ -6,7 +6,6 @@ import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import { Separator } from '@/components/ui/separator'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
@@ -274,7 +273,7 @@ export function SearchQuery() {
     try {
       // 解析查询体
       let parsedQuery = JSON.parse(queryBody)
-      
+
       console.log('=== 查询执行调试信息 ===')
       console.log('选择的索引:', selectedIndex)
       console.log('原始查询体:', queryBody)
@@ -283,10 +282,10 @@ export function SearchQuery() {
       console.log('自定义分页配置:', customPagination)
       console.log('当前分页状态:', pagination)
       console.log('排序配置:', sortConfig)
-      
+
       // 确定使用的分页配置
       let effectivePagination: PaginationConfig
-      
+
       if (customPagination) {
         // 使用自定义分页配置
         effectivePagination = customPagination
@@ -302,23 +301,23 @@ export function SearchQuery() {
         effectivePagination = pagination
         console.log('使用当前分页设置:', effectivePagination)
       }
-      
+
       // 应用分页参数到查询
       parsedQuery.from = (effectivePagination.currentPage - 1) * effectivePagination.pageSize
       parsedQuery.size = effectivePagination.pageSize
       console.log('最终分页参数 - from:', parsedQuery.from, 'size:', parsedQuery.size)
-      
+
       // 应用排序配置
       if (sortConfig) {
         parsedQuery.sort = [{ [sortConfig.field]: { order: sortConfig.direction } }]
         console.log('应用排序:', parsedQuery.sort)
       }
-      
+
       console.log('最终查询体:', JSON.stringify(parsedQuery, null, 2))
-      
+
       // 更新查询体显示
       setQueryBody(JSON.stringify(parsedQuery, null, 2))
-      
+
       // 执行查询
       console.log('开始执行查询...')
       const result = await executeQuery(selectedIndex, parsedQuery)
@@ -888,13 +887,12 @@ export function SearchQuery() {
           <div className="flex-1 overflow-hidden">
             <PanelGroup direction="horizontal" autoSaveId="search-query-layout" className="w-full">
               {/* 查询编辑器面板 */}
-              <Panel defaultSize={30} minSize={20} maxSize={50}>
+              <Panel defaultSize={30} minSize={10}>
                 <Card className="flex flex-col h-full">
                   <CardHeader>
                     <CardTitle className="flex items-center justify-between">
                       <span className="flex items-center">
-                        <Search className="h-5 w-5 mr-2" />
-                        REST API 查询
+                        <Search className="h-5 w-5 mr-2" />查询
                       </span>
                       <div className="flex items-center space-x-2">
                         <Dialog open={filterDialogOpen} onOpenChange={setFilterDialogOpen}>
@@ -1057,7 +1055,7 @@ export function SearchQuery() {
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="flex-1 w-full overflow-hidden">
-                    <ScrollArea className="h-[calc(100vh-400px)]">
+                    <div className="h-[calc(100vh-400px)] overflow-y-auto">
                       {isLoading ? (
                         <div className="flex items-center justify-center h-32">
                           <RefreshCw className="h-6 w-6 animate-spin mr-2" />
@@ -1069,9 +1067,9 @@ export function SearchQuery() {
                         </div>
                       ) : viewMode === 'table' ? (
                         /* 表格视图 */
-                        <div className="border rounded-md w-full">
-                          <div className="overflow-x-auto">
-                            <Table className="w-auto min-w-full">
+                        <div className="border rounded-md flex-1 overflow-hidden">
+                          <div className="w-full overflow-x-auto">
+                            <Table className="min-w-[1000px] w-fit">
                               <TableHeader>
                                 <TableRow>
                                   <TableHead className="w-12 flex-shrink-0">#</TableHead>
@@ -1173,107 +1171,6 @@ export function SearchQuery() {
                               </TableBody>
                             </Table>
                           </div>
-
-                          {/* 分页控件 */}
-                          {pagination.totalItems > 0 && (() => {
-                            const paginationInfo = getPaginationInfo()
-                            return (
-                              <div className="flex items-center justify-between px-4 py-3 border-t">
-                                <div className="flex items-center space-x-2">
-                                  <span className="text-sm text-muted-foreground">
-                                    显示 {paginationInfo.startItem}-{paginationInfo.endItem} 条，共 {pagination.totalItems} 条
-                                  </span>
-                                  <div className="flex items-center space-x-2">
-                                    <Label htmlFor="page-size" className="text-sm">每页:</Label>
-                                    <select
-                                      id="page-size"
-                                      className="text-sm border rounded px-2 py-1"
-                                      value={pagination.pageSize}
-                                      onChange={(e) => handlePageSizeChange(Number(e.target.value))}
-                                    >
-                                      <option value={10}>10</option>
-                                      <option value={20}>20</option>
-                                      <option value={50}>50</option>
-                                      <option value={100}>100</option>
-                                    </select>
-                                  </div>
-                                </div>
-
-                                <div className="flex items-center space-x-1">
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => handlePageChange(1)}
-                                    disabled={!paginationInfo.hasPrevPage}
-                                  >
-                                    <ChevronsLeft className="h-4 w-4" />
-                                  </Button>
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => handlePageChange(pagination.currentPage - 1)}
-                                    disabled={!paginationInfo.hasPrevPage}
-                                  >
-                                    <ChevronLeft className="h-4 w-4" />
-                                  </Button>
-
-                                  <div className="flex items-center space-x-1">
-                                    {(() => {
-                                      const { totalPages } = paginationInfo
-                                      const currentPage = pagination.currentPage
-                                      const pages = []
-
-                                      // 计算显示的页码范围
-                                      let startPage = Math.max(1, currentPage - 2)
-                                      let endPage = Math.min(totalPages, currentPage + 2)
-
-                                      // 确保显示5个页码（如果总页数足够）
-                                      if (endPage - startPage < 4) {
-                                        if (startPage === 1) {
-                                          endPage = Math.min(totalPages, startPage + 4)
-                                        } else {
-                                          startPage = Math.max(1, endPage - 4)
-                                        }
-                                      }
-
-                                      for (let i = startPage; i <= endPage; i++) {
-                                        pages.push(
-                                          <Button
-                                            key={i}
-                                            variant={i === currentPage ? "default" : "outline"}
-                                            size="sm"
-                                            onClick={() => handlePageChange(i)}
-                                            className="w-8 h-8 p-0"
-                                          >
-                                            {i}
-                                          </Button>
-                                        )
-                                      }
-
-                                      return pages
-                                    })()}
-                                  </div>
-
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => handlePageChange(pagination.currentPage + 1)}
-                                    disabled={!paginationInfo.hasNextPage}
-                                  >
-                                    <ChevronRight className="h-4 w-4" />
-                                  </Button>
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => handlePageChange(paginationInfo.totalPages)}
-                                    disabled={!paginationInfo.hasNextPage}
-                                  >
-                                    <ChevronsRight className="h-4 w-4" />
-                                  </Button>
-                                </div>
-                              </div>
-                            )
-                          })()}
                         </div>
                       ) : (
                         /* JSON视图 */
@@ -1341,109 +1238,111 @@ export function SearchQuery() {
                             </div>
                           ))}
 
-                          {/* 分页控件 */}
-                          {pagination.totalItems > 0 && (() => {
-                            const paginationInfo = getPaginationInfo()
-                            return (
-                              <div className="flex items-center justify-between px-4 py-3 border-t">
-                                <div className="flex items-center space-x-2">
-                                  <span className="text-sm text-muted-foreground">
-                                    显示 {paginationInfo.startItem}-{paginationInfo.endItem} 条，共 {pagination.totalItems} 条
-                                  </span>
-                                  <div className="flex items-center space-x-2">
-                                    <Label htmlFor="page-size" className="text-sm">每页:</Label>
-                                    <select
-                                      id="page-size"
-                                      className="text-sm border rounded px-2 py-1"
-                                      value={pagination.pageSize}
-                                      onChange={(e) => handlePageSizeChange(Number(e.target.value))}
-                                    >
-                                      <option value={10}>10</option>
-                                      <option value={20}>20</option>
-                                      <option value={50}>50</option>
-                                      <option value={100}>100</option>
-                                    </select>
-                                  </div>
-                                </div>
-
-                                <div className="flex items-center space-x-1">
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => handlePageChange(1)}
-                                    disabled={!paginationInfo.hasPrevPage}
-                                  >
-                                    <ChevronsLeft className="h-4 w-4" />
-                                  </Button>
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => handlePageChange(pagination.currentPage - 1)}
-                                    disabled={!paginationInfo.hasPrevPage}
-                                  >
-                                    <ChevronLeft className="h-4 w-4" />
-                                  </Button>
-
-                                  <div className="flex items-center space-x-1">
-                                    {(() => {
-                                      const { totalPages } = paginationInfo
-                                      const currentPage = pagination.currentPage
-                                      const pages = []
-
-                                      // 计算显示的页码范围
-                                      let startPage = Math.max(1, currentPage - 2)
-                                      let endPage = Math.min(totalPages, currentPage + 2)
-
-                                      // 确保显示5个页码（如果总页数足够）
-                                      if (endPage - startPage < 4) {
-                                        if (startPage === 1) {
-                                          endPage = Math.min(totalPages, startPage + 4)
-                                        } else {
-                                          startPage = Math.max(1, endPage - 4)
-                                        }
-                                      }
-
-                                      for (let i = startPage; i <= endPage; i++) {
-                                        pages.push(
-                                          <Button
-                                            key={i}
-                                            variant={i === currentPage ? "default" : "outline"}
-                                            size="sm"
-                                            onClick={() => handlePageChange(i)}
-                                            className="w-8 h-8 p-0"
-                                          >
-                                            {i}
-                                          </Button>
-                                        )
-                                      }
-
-                                      return pages
-                                    })()}
-                                  </div>
-
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => handlePageChange(pagination.currentPage + 1)}
-                                    disabled={!paginationInfo.hasNextPage}
-                                  >
-                                    <ChevronRight className="h-4 w-4" />
-                                  </Button>
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => handlePageChange(paginationInfo.totalPages)}
-                                    disabled={!paginationInfo.hasNextPage}
-                                  >
-                                    <ChevronsRight className="h-4 w-4" />
-                                  </Button>
-                                </div>
-                              </div>
-                            )
-                          })()}
                         </div>
                       )}
-                    </ScrollArea>
+
+                      {/* 分页控件 */}
+                      {pagination.totalItems > 0 && (() => {
+                        const paginationInfo = getPaginationInfo()
+                        return (
+                          <div className="flex items-center justify-between px-4 py-3">
+                            <div className="flex items-center space-x-2">
+                              <span className="text-sm text-muted-foreground">
+                                显示 {paginationInfo.startItem}-{paginationInfo.endItem} 条，共 {pagination.totalItems} 条
+                              </span>
+                              <div className="flex items-center space-x-2">
+                                <Label htmlFor="page-size" className="text-sm">每页:</Label>
+                                <select
+                                  id="page-size"
+                                  className="text-sm border rounded px-2 py-1"
+                                  value={pagination.pageSize}
+                                  onChange={(e) => handlePageSizeChange(Number(e.target.value))}
+                                >
+                                  <option value={10}>10</option>
+                                  <option value={20}>20</option>
+                                  <option value={50}>50</option>
+                                  <option value={100}>100</option>
+                                </select>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center space-x-1">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handlePageChange(1)}
+                                disabled={!paginationInfo.hasPrevPage}
+                              >
+                                <ChevronsLeft className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handlePageChange(pagination.currentPage - 1)}
+                                disabled={!paginationInfo.hasPrevPage}
+                              >
+                                <ChevronLeft className="h-4 w-4" />
+                              </Button>
+
+                              <div className="flex items-center space-x-1">
+                                {(() => {
+                                  const { totalPages } = paginationInfo
+                                  const currentPage = pagination.currentPage
+                                  const pages = []
+
+                                  // 计算显示的页码范围
+                                  let startPage = Math.max(1, currentPage - 2)
+                                  let endPage = Math.min(totalPages, currentPage + 2)
+
+                                  // 确保显示5个页码（如果总页数足够）
+                                  if (endPage - startPage < 4) {
+                                    if (startPage === 1) {
+                                      endPage = Math.min(totalPages, startPage + 4)
+                                    } else {
+                                      startPage = Math.max(1, endPage - 4)
+                                    }
+                                  }
+
+                                  for (let i = startPage; i <= endPage; i++) {
+                                    pages.push(
+                                      <Button
+                                        key={i}
+                                        variant={i === currentPage ? "default" : "outline"}
+                                        size="sm"
+                                        onClick={() => handlePageChange(i)}
+                                        className="w-8 h-8 p-0"
+                                      >
+                                        {i}
+                                      </Button>
+                                    )
+                                  }
+
+                                  return pages
+                                })()}
+                              </div>
+
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handlePageChange(pagination.currentPage + 1)}
+                                disabled={!paginationInfo.hasNextPage}
+                              >
+                                <ChevronRight className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handlePageChange(paginationInfo.totalPages)}
+                                disabled={!paginationInfo.hasNextPage}
+                              >
+                                <ChevronsRight className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        )
+                      })()}
+                    </div>
+
                   </CardContent>
                 </Card>
               </Panel>

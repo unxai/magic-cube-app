@@ -19,7 +19,7 @@ export function Layout() {
       {/* 主要内容区域 */}
       <div 
         className={cn(
-          "flex flex-col flex-1 transition-all duration-300",
+          "flex flex-col flex-1 transition-all duration-300 overflow-hidden",
           sidebarCollapsed ? "ml-16" : "ml-64"
         )}
       >
