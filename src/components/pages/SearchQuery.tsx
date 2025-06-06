@@ -274,15 +274,6 @@ export function SearchQuery() {
       // 解析查询体
       let parsedQuery = JSON.parse(queryBody)
 
-      console.log('=== 查询执行调试信息 ===')
-      console.log('选择的索引:', selectedIndex)
-      console.log('原始查询体:', queryBody)
-      console.log('解析后的查询:', parsedQuery)
-      console.log('重置分页:', resetPagination)
-      console.log('自定义分页配置:', customPagination)
-      console.log('当前分页状态:', pagination)
-      console.log('排序配置:', sortConfig)
-
       // 确定使用的分页配置
       let effectivePagination: PaginationConfig
 
@@ -290,27 +281,22 @@ export function SearchQuery() {
         // 使用自定义分页配置
         effectivePagination = customPagination
         setPagination(customPagination)
-        console.log('使用自定义分页配置:', effectivePagination)
       } else if (resetPagination) {
         // 重置分页，回到第一页
         effectivePagination = { ...pagination, currentPage: 1 }
         setPagination(prev => ({ ...prev, currentPage: 1 }))
-        console.log('重置分页到第一页:', effectivePagination)
       } else {
         // 使用当前分页设置
         effectivePagination = pagination
-        console.log('使用当前分页设置:', effectivePagination)
       }
 
       // 应用分页参数到查询
       parsedQuery.from = (effectivePagination.currentPage - 1) * effectivePagination.pageSize
       parsedQuery.size = effectivePagination.pageSize
-      console.log('最终分页参数 - from:', parsedQuery.from, 'size:', parsedQuery.size)
 
       // 应用排序配置
       if (sortConfig) {
         parsedQuery.sort = [{ [sortConfig.field]: { order: sortConfig.direction } }]
-        console.log('应用排序:', parsedQuery.sort)
       }
 
       console.log('最终查询体:', JSON.stringify(parsedQuery, null, 2))
@@ -319,7 +305,6 @@ export function SearchQuery() {
       setQueryBody(JSON.stringify(parsedQuery, null, 2))
 
       // 执行查询
-      console.log('开始执行查询...')
       const result = await executeQuery(selectedIndex, parsedQuery)
       console.log('查询结果:', result)
       const duration = Date.now() - startTime

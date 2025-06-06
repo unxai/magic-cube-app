@@ -23,7 +23,7 @@
 - Node.js 18+
 - npm 或 yarn
 - Ollama（用于本地 AI 功能）
-- Elasticsearch（可选，用于搜索功能）
+- Elasticsearch（用于搜索功能）
 
 ### 安装
 

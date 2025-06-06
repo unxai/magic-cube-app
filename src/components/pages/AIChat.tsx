@@ -1,21 +1,115 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { Separator } from '@/components/ui/separator'
 import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { Send, Bot, User, Trash2, Download, Copy } from 'lucide-react'
+import { Send, Bot, User, Trash2, Download, Copy, ChevronDown, ChevronRight, ArrowUp, ArrowDown } from 'lucide-react'
 import { useAIStore } from '@/stores/ai-store'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
+import ReactMarkdown from 'react-markdown'
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
+import { tomorrow } from 'react-syntax-highlighter/dist/esm/styles/prism'
+import { toast } from '@/hooks/use-toast'
 
 interface Message {
   id: string
   role: 'user' | 'assistant'
   content: string
   timestamp: Date
+  metadata?: {
+    thinkContent?: string
+    isStreaming?: boolean
+    executionTime?: number
+  }
+}
+
+/**
+ * Think内容折叠组件
+ */
+function ThinkSection({ thinkContent }: { thinkContent: string }) {
+  const [isExpanded, setIsExpanded] = useState(false)
+
+  return (
+    <div className="w-full">
+      <Button
+        variant="ghost"
+        size="sm"
+        className="h-auto p-2 w-full justify-start bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-md"
+        onClick={() => setIsExpanded(!isExpanded)}
+      >
+        <div className="flex items-center space-x-2 text-amber-700">
+          {isExpanded ? (
+            <ChevronDown className="h-4 w-4" />
+          ) : (
+            <ChevronRight className="h-4 w-4" />
+          )}
+          <span className="text-sm font-medium">💭 AI 思考过程</span>
+        </div>
+      </Button>
+      {isExpanded && (
+        <div className="mt-2 p-3 bg-amber-50 border border-amber-200 rounded-md">
+          <ReactMarkdown
+            components={{
+              code({ node, className, children, ...props }) {
+                const match = /language-(\w+)/.exec(className || '')
+                return match ? (
+                  <SyntaxHighlighter
+                    style={tomorrow}
+                    language={match[1]}
+                    PreTag="div"
+                    className="text-xs"
+                  >
+                    {String(children).replace(/\n$/, '')}
+                  </SyntaxHighlighter>
+                ) : (
+                  <code className={className} {...props}>
+                    {children}
+                  </code>
+                )
+              }
+            }}
+          >
+            {thinkContent}
+          </ReactMarkdown>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/**
+ * Markdown渲染组件
+ */
+function MarkdownMessage({ content }: { content: string }) {
+  return (
+    <div className="prose prose-sm max-w-none dark:prose-invert">
+      <ReactMarkdown
+        components={{
+          code({ node, className, children, ...props }) {
+            const match = /language-(\w+)/.exec(className || '')
+            return match ? (
+              <SyntaxHighlighter
+                style={tomorrow}
+                language={match[1]}
+                PreTag="div"
+                className="text-sm"
+              >
+                {String(children).replace(/\n$/, '')}
+              </SyntaxHighlighter>
+            ) : (
+              <code className={className} {...props}>
+                {children}
+              </code>
+            )
+          }
+        }}
+      >
+        {content}
+      </ReactMarkdown>
+    </div>
+  )
 }
 
 /**
@@ -26,36 +120,52 @@ export function AIChat() {
   const [message, setMessage] = useState('')
   const [messages, setMessages] = useState<Message[]>([])
   const [isLoading, setIsLoading] = useState(false)
+  const [showScrollButtons, setShowScrollButtons] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const scrollAreaRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
-  
-  const { 
-    sendMessage, 
-    ollamaConnected, 
-    availableModels, 
-    currentModel, 
+
+  const {
+    sendMessage,
+    ollamaConnected,
+    availableModels,
+    currentModel,
     setCurrentModel,
     fetchAvailableModels,
-    isModelLoading 
+    isModelLoading,
+    currentSession,
+    createSession,
+    sessions,
+    setCurrentSession,
+    isGenerating
   } = useAIStore()
 
-  // 从本地存储加载历史对话
+  // 确保有当前会话
   useEffect(() => {
-    const savedMessages = localStorage.getItem('ai-chat-history')
-    if (savedMessages) {
-      try {
-        const parsedMessages = JSON.parse(savedMessages)
-        // 将timestamp字符串转换回Date对象
-        const messagesWithDateObjects = parsedMessages.map((msg: any) => ({
-          ...msg,
-          timestamp: new Date(msg.timestamp)
-        }))
-        setMessages(messagesWithDateObjects)
-      } catch (error) {
-        console.error('Failed to load chat history:', error)
+    if (!currentSession) {
+      // 如果有历史会话，恢复最近的会话
+      if (sessions.length > 0) {
+        const latestSession = sessions[0] // sessions 按创建时间倒序排列
+        setCurrentSession(latestSession)
+      } else {
+        // 如果没有历史会话，创建新会话
+        createSession('AI 助手对话')
       }
     }
-  }, [])
+  }, [currentSession, sessions, setCurrentSession, createSession])
+
+  // 同步会话消息到本地状态
+  useEffect(() => {
+    if (currentSession?.messages) {
+      const convertedMessages: Message[] = currentSession.messages.map(msg => ({
+        id: msg.id,
+        role: msg.role as 'user' | 'assistant',
+        content: msg.content,
+        timestamp: new Date(msg.timestamp)
+      }))
+      setMessages(convertedMessages)
+    }
+  }, [currentSession?.messages])
 
   // 当连接到Ollama时获取可用模型
   useEffect(() => {
@@ -64,7 +174,7 @@ export function AIChat() {
     }
   }, [ollamaConnected, fetchAvailableModels])
 
-  // 保存对话历史到本地存储
+  // 保存对话历史到本地存储（可选，因为store已经持久化）
   useEffect(() => {
     if (messages.length > 0) {
       localStorage.setItem('ai-chat-history', JSON.stringify(messages))
@@ -78,44 +188,66 @@ export function AIChat() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }
 
+  /**
+   * 滚动到消息顶部
+   */
+  const scrollToTop = () => {
+    if (scrollAreaRef.current) {
+      const scrollableElement = scrollAreaRef.current.querySelector('[data-radix-scroll-area-viewport]') as HTMLElement
+      if (scrollableElement) {
+        scrollableElement.scrollTo({ top: 0, behavior: 'smooth' })
+      }
+    }
+  }
+
+  /**
+   * 检查是否需要显示滚动按钮
+   */
+  const checkScrollButtons = () => {
+    if (scrollAreaRef.current) {
+      // ScrollArea 组件内部的可滚动元素通常是第一个子元素
+      const scrollableElement = scrollAreaRef.current.querySelector('[data-radix-scroll-area-viewport]') as HTMLElement
+      if (scrollableElement) {
+        const { scrollHeight, clientHeight } = scrollableElement
+        setShowScrollButtons(scrollHeight > clientHeight + 100)
+      }
+    }
+  }
+
   useEffect(() => {
     scrollToBottom()
+    checkScrollButtons()
   }, [messages])
+
+  useEffect(() => {
+    const scrollElement = scrollAreaRef.current
+    if (scrollElement) {
+      const scrollableElement = scrollElement.querySelector('[data-radix-scroll-area-viewport]') as HTMLElement
+      if (scrollableElement) {
+        scrollableElement.addEventListener('scroll', checkScrollButtons)
+        return () => scrollableElement.removeEventListener('scroll', checkScrollButtons)
+      }
+    }
+  }, [])
 
   /**
    * 发送消息
    */
   const handleSendMessage = async () => {
-    if (!message.trim() || isLoading) {
+    if (!message.trim() || isLoading || isGenerating) {
       return
     }
 
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      role: 'user',
-      content: message.trim(),
-      timestamp: new Date()
-    }
-
-    setMessages(prev => [...prev, userMessage])
+    const messageContent = message.trim()
     setMessage('')
     setIsLoading(true)
 
     try {
-      await sendMessage(userMessage.content)
-      
-      // sendMessage 会自动添加消息到 store，这里不需要手动添加
+      // sendMessage 会自动添加用户消息和AI回复到 store
+      await sendMessage(messageContent)
     } catch (error) {
       console.error('Failed to send message:', error)
-      
-      const errorMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: '抱歉，发送消息时出现错误。请检查网络连接或稍后重试。',
-        timestamp: new Date()
-      }
-
-      setMessages(prev => [...prev, errorMessage])
+      // 错误处理已经在 store 中实现
     } finally {
       setIsLoading(false)
       inputRef.current?.focus()
@@ -126,7 +258,11 @@ export function AIChat() {
    * 清空聊天记录
    */
   const handleClearChat = () => {
-    setMessages([])
+    if (currentSession) {
+      // 使用 store 的清空方法
+      const { clearMessages } = useAIStore.getState()
+      clearMessages(currentSession.id)
+    }
     localStorage.removeItem('ai-chat-history')
   }
 
@@ -135,6 +271,10 @@ export function AIChat() {
    */
   const handleCopyMessage = (content: string) => {
     navigator.clipboard.writeText(content)
+    toast({
+      title: '复制成功',
+      description: '消息内容已复制到剪贴板'
+    })
   }
 
   /**
@@ -145,11 +285,11 @@ export function AIChat() {
       exportTime: new Date().toISOString(),
       messages: messages
     }
-    
+
     const blob = new Blob([JSON.stringify(chatData, null, 2)], {
       type: 'application/json'
     })
-    
+
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
@@ -171,189 +311,238 @@ export function AIChat() {
   }
 
   return (
-    <div className="h-full p-6 flex flex-col space-y-6">
+    <div className="h-full flex flex-col relative">
       {/* 页面标题 */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">AI 助手</h1>
-          <p className="text-muted-foreground">
-            与 AI 助手对话，获取 Elasticsearch 相关帮助
-          </p>
-        </div>
-        <div className="flex items-center space-x-2">
-          <Badge variant={ollamaConnected ? 'default' : 'destructive'}>
-            {ollamaConnected ? '已连接' : '未连接'}
-          </Badge>
-          
-          {/* 模型选择器 */}
-          {ollamaConnected && availableModels.length > 0 && (
-            <div className="flex items-center space-x-2">
-              <Label htmlFor="model-select" className="text-sm text-muted-foreground">
-                模型:
-              </Label>
-              <Select 
-                value={currentModel?.id || ''} 
-                onValueChange={(value) => {
-                  const model = availableModels.find(m => m.id === value)
-                  if (model) {
-                    setCurrentModel(model)
-                  }
-                }}
-                disabled={isModelLoading}
-              >
-                <SelectTrigger className="w-40">
-                  <SelectValue placeholder={isModelLoading ? "加载中..." : "选择模型"} />
-                </SelectTrigger>
-                <SelectContent>
-                  {availableModels
-                    .filter(model => model.isAvailable)
-                    .map((model) => (
-                    <SelectItem key={model.id} value={model.id}>
-                      {model.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-          
-          {messages.length > 0 && (
-            <>
-              <Button variant="outline" size="sm" onClick={handleExportChat}>
-                <Download className="h-4 w-4 mr-2" />
-                导出
-              </Button>
-              <Button variant="outline" size="sm" onClick={handleClearChat}>
-                <Trash2 className="h-4 w-4 mr-2" />
-                清空
-              </Button>
-            </>
-          )}
+      <div className="flex-shrink-0 p-6 pb-4 border-b">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">AI 助手</h1>
+            <p className="text-muted-foreground">
+              与 AI 助手对话，获取 Elasticsearch 相关帮助
+            </p>
+          </div>
+          <div className="flex items-center space-x-2">
+            <Badge variant={ollamaConnected ? 'default' : 'destructive'}>
+              {ollamaConnected ? '已连接' : '未连接'}
+            </Badge>
+
+            {/* 模型选择器 */}
+            {ollamaConnected && availableModels.length > 0 && (
+              <div className="flex items-center space-x-2">
+                <Label htmlFor="model-select" className="text-sm text-muted-foreground">
+                  模型:
+                </Label>
+                <Select
+                  value={currentModel?.id || ''}
+                  onValueChange={(value) => {
+                    const model = availableModels.find(m => m.id === value)
+                    if (model) {
+                      setCurrentModel(model)
+                    }
+                  }}
+                  disabled={isModelLoading}
+                >
+                  <SelectTrigger className="w-40">
+                    <SelectValue placeholder={isModelLoading ? "加载中..." : "选择模型"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableModels
+                      .filter(model => model.isAvailable)
+                      .map((model) => (
+                        <SelectItem key={model.id} value={model.id}>
+                          {model.name}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {messages.length > 0 && (
+              <>
+                <Button variant="outline" size="sm" onClick={handleExportChat}>
+                  <Download className="h-4 w-4 mr-2" />
+                  导出
+                </Button>
+                <Button variant="outline" size="sm" onClick={handleClearChat}>
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  清空
+                </Button>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
       {/* 聊天区域 */}
-      <Card className="flex-1 flex flex-col">
-        <CardHeader>
-          <CardTitle className="flex items-center">
-            <Bot className="h-5 w-5 mr-2" />
-            对话
-          </CardTitle>
-          <CardDescription>
-            您可以询问关于 Elasticsearch 的任何问题
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex-1 flex flex-col p-0">
-          {/* 消息列表 */}
-          <ScrollArea className="flex-1 p-4">
-            {messages.length === 0 ? (
-              <div className="flex items-center justify-center h-full text-muted-foreground">
-                <div className="text-center space-y-2">
-                  <Bot className="h-12 w-12 mx-auto opacity-50" />
-                  <p>开始与 AI 助手对话</p>
-                  <p className="text-sm">您可以询问 Elasticsearch 相关的问题</p>
-                </div>
+      <div className="flex-1 flex flex-col relative overflow-hidden">
+        {/* 消息列表 */}
+        <ScrollArea className="flex-1 px-6" ref={scrollAreaRef}>
+          {messages.length === 0 ? (
+            <div className="flex items-center justify-center h-full text-muted-foreground">
+              <div className="text-center space-y-2">
+                <Bot className="h-12 w-12 mx-auto opacity-50" />
+                <p>开始与 AI 助手对话</p>
+                <p className="text-sm">您可以询问 Elasticsearch 相关的问题</p>
               </div>
-            ) : (
-              <div className="space-y-4">
-                {messages.map((msg) => (
-                  <div
-                    key={msg.id}
-                    className={`flex items-start space-x-3 ${
-                      msg.role === 'user' ? 'flex-row-reverse space-x-reverse' : ''
-                    }`}
-                  >
-                    <Avatar className="w-8 h-8">
-                      <AvatarFallback>
-                        {msg.role === 'user' ? (
-                          <User className="h-4 w-4" />
-                        ) : (
-                          <Bot className="h-4 w-4" />
-                        )}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div
-                      className={`flex-1 max-w-[80%] ${
-                        msg.role === 'user' ? 'text-right' : ''
-                      }`}
-                    >
-                      <div
-                        className={`rounded-lg p-3 ${
-                          msg.role === 'user'
-                            ? 'bg-primary text-primary-foreground ml-auto'
-                            : 'bg-muted'
-                        }`}
-                      >
-                        <p className="whitespace-pre-wrap">{msg.content}</p>
-                      </div>
-                      <div className="flex items-center justify-between mt-1">
-                        <span className="text-xs text-muted-foreground">
-                          {formatTime(msg.timestamp)}
-                        </span>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100"
-                          onClick={() => handleCopyMessage(msg.content)}
-                        >
-                          <Copy className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-                {isLoading && (
-                  <div className="flex items-start space-x-3">
-                    <Avatar className="w-8 h-8">
-                      <AvatarFallback>
-                        <Bot className="h-4 w-4" />
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1">
-                      <div className="bg-muted rounded-lg p-3">
-                        <div className="flex space-x-1">
-                          <div className="w-2 h-2 bg-current rounded-full animate-bounce" />
-                          <div className="w-2 h-2 bg-current rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
-                          <div className="w-2 h-2 bg-current rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
+            </div>
+          ) : (
+            <div className="space-y-6 py-4">
+              {messages.map((msg, index) => {
+                const showAvatar = index === 0 || messages[index - 1].role !== msg.role
+                return (
+                  <div key={msg.id} className="group">
+                    <div className={`flex items-start space-x-3 ${msg.role === 'user' ? 'flex-row-reverse space-x-reverse' : ''
+                      }`}>
+                      {/* 头像 - 只在角色切换时显示 */}
+                      {showAvatar ? (
+                        <Avatar className="w-8 h-8 flex-shrink-0">
+                          <AvatarFallback>
+                            {msg.role === 'user' ? (
+                              <User className="h-4 w-4" />
+                            ) : (
+                              <Bot className="h-4 w-4" />
+                            )}
+                          </AvatarFallback>
+                        </Avatar>
+                      ) : (
+                        <div className="w-8 h-8 flex-shrink-0" />
+                      )}
+
+                      <div className={`flex flex-col flex-1 ${msg.role === 'user' ? 'items-end' : 'items-start'
+                        }`}>
+                        <div className={`max-w-[85%] space-y-2 ${msg.role === 'user' ? 'min-w-[200px]' : 'min-w-[300px]'
+                          }`}>
+                          {/* Think 内容区域 */}
+                          {msg.role === 'assistant' && msg.metadata?.thinkContent && (
+                            <ThinkSection thinkContent={msg.metadata.thinkContent} />
+                          )}
+
+                          {/* 主要回答内容 */}
+                          <div className={`rounded-lg p-4 ${msg.role === 'user'
+                              ? 'bg-primary text-primary-foreground'
+                              : 'bg-muted'
+                            }`}>
+                            {msg.role === 'user' ? (
+                              <p className="whitespace-pre-wrap break-words leading-relaxed">
+                                {msg.content}
+                              </p>
+                            ) : (
+                              <div className="prose prose-sm max-w-none dark:prose-invert">
+                                <MarkdownMessage content={msg.content} />
+                              </div>
+                            )}
+                            {msg.role === 'assistant' && msg.metadata?.isStreaming && (
+                              <div className="flex space-x-1 mt-3">
+                                <div className="w-2 h-2 bg-current rounded-full animate-bounce opacity-60" />
+                                <div className="w-2 h-2 bg-current rounded-full animate-bounce opacity-60" style={{ animationDelay: '0.1s' }} />
+                                <div className="w-2 h-2 bg-current rounded-full animate-bounce opacity-60" style={{ animationDelay: '0.2s' }} />
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* 消息元信息 */}
+                        <div className={`flex items-center mt-2 space-x-2 ${msg.role === 'user' ? 'flex-row-reverse space-x-reverse' : ''
+                          }`}>
+                          <span className="text-xs text-muted-foreground">
+                            {formatTime(msg.timestamp)}
+                          </span>
+                          {msg.metadata?.executionTime && (
+                            <span className="text-xs text-muted-foreground">
+                              {msg.metadata.executionTime}ms
+                            </span>
+                          )}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                            onClick={() => handleCopyMessage(msg.content)}
+                          >
+                            <Copy className="h-3 w-3" />
+                          </Button>
                         </div>
                       </div>
                     </div>
                   </div>
-                )}
-                <div ref={messagesEndRef} />
-              </div>
-            )}
-          </ScrollArea>
+                )
+              })}
 
-          <Separator />
-
-          {/* 输入区域 */}
-          <div className="p-4">
-            <div className="flex items-center space-x-2">
-              <Input
-                ref={inputRef}
-                placeholder="输入您的问题..."
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
-                disabled={isLoading || !ollamaConnected}
-              />
-              <Button
-                onClick={handleSendMessage}
-                disabled={!message.trim() || isLoading || !ollamaConnected}
-                size="sm"
-              >
-                <Send className="h-4 w-4" />
-              </Button>
+              {/* 加载状态 */}
+              {(isLoading || isGenerating) && (
+                <div className="flex items-start space-x-3">
+                  <Avatar className="w-8 h-8">
+                    <AvatarFallback>
+                      <Bot className="h-4 w-4" />
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1">
+                    <div className="bg-muted rounded-lg p-4 max-w-[300px]">
+                      <div className="flex space-x-1">
+                        <div className="w-2 h-2 bg-current rounded-full animate-bounce" />
+                        <div className="w-2 h-2 bg-current rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
+                        <div className="w-2 h-2 bg-current rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+              <div ref={messagesEndRef} />
             </div>
-            {!ollamaConnected && (
-              <p className="text-sm text-muted-foreground mt-2">
-                请检查 AI 服务连接状态
-              </p>
-            )}
+          )}
+        </ScrollArea>
+
+        {/* 滚动按钮 */}
+        {showScrollButtons && (
+          <div className="absolute right-6 bottom-24 flex flex-col space-y-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 w-8 p-0 rounded-full shadow-lg"
+              onClick={scrollToTop}
+            >
+              <ArrowUp className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 w-8 p-0 rounded-full shadow-lg"
+              onClick={scrollToBottom}
+            >
+              <ArrowDown className="h-4 w-4" />
+            </Button>
           </div>
-        </CardContent>
-      </Card>
+        )}
+      </div>
+
+      {/* 固定输入区域 */}
+      <div className="flex-shrink-0 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <div className="p-6">
+          <div className="flex items-center space-x-2">
+            <Input
+              ref={inputRef}
+              placeholder="输入您的问题..."
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+              disabled={isLoading || isGenerating || !ollamaConnected}
+              className="flex-1"
+            />
+            <Button
+              onClick={handleSendMessage}
+              disabled={!message.trim() || isLoading || isGenerating || !ollamaConnected}
+              size="sm"
+            >
+              <Send className="h-4 w-4" />
+            </Button>
+          </div>
+          {!ollamaConnected && (
+            <p className="text-sm text-muted-foreground mt-2">
+              请检查 AI 服务连接状态
+            </p>
+          )}
+        </div>
+      </div>
     </div>
   )
 }

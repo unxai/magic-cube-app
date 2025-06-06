@@ -122,13 +122,17 @@ function App() {
         }
       }
       
-      // 如果有Ollama配置但显示未连接，尝试重新连接
-      if (ollamaHost && !ollamaConnected) {
+      // 尝试连接到Ollama服务
+      if (!ollamaConnected) {
         try {
-          await connectToOllama(ollamaHost, ollamaPort)
-          console.log('已恢复 Ollama 连接')
+          // 如果有保存的配置，使用保存的配置；否则使用默认配置
+          const host = ollamaHost || 'localhost'
+          const port = ollamaPort || 11434
+          await connectToOllama(host, port)
+          console.log('已连接到 Ollama 服务')
         } catch (error) {
-          console.error('恢复 Ollama 连接失败:', error)
+          console.error('连接 Ollama 服务失败:', error)
+          // 连接失败不影响应用启动，只是AI功能不可用
         }
       }
     } catch (error) {

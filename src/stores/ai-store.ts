@@ -32,6 +32,8 @@ export interface ChatMessage {
     generatedDSL?: string
     executionTime?: number
     error?: string
+    isStreaming?: boolean
+    thinkContent?: string
   }
 }
 
@@ -99,7 +101,7 @@ interface AIActions {
   updateSessionTitle: (sessionId: string, title: string) => void
 
   // 消息管理
-  addMessage: (sessionId: string, message: Omit<ChatMessage, 'id' | 'timestamp'>) => void
+  addMessage: (sessionId: string, message: Omit<ChatMessage, 'timestamp'>) => void
   updateMessage: (sessionId: string, messageId: string, updates: Partial<ChatMessage>) => void
   clearMessages: (sessionId: string) => void
 
@@ -149,7 +151,7 @@ const initialState: AIState = {
  * 生成唯一 ID
  */
 function generateId(): string {
-  return Date.now().toString(36) + Math.random().toString(36).substr(2)
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 11)
 }
 
 /**
@@ -320,10 +322,15 @@ export const useAIStore = create<AIStore>()(
       },
 
       // 消息管理
+      /**
+       * 添加消息到指定会话
+       * @param sessionId 会话ID
+       * @param messageData 消息数据（可选包含id，不包含timestamp）
+       */
       addMessage: (sessionId, messageData) => {
         const message: ChatMessage = {
           ...messageData,
-          id: generateId(),
+          id: messageData.id || generateId(),
           timestamp: new Date().toISOString(),
         }
 
@@ -395,7 +402,7 @@ export const useAIStore = create<AIStore>()(
 
       // AI 交互
       sendMessage: async (content, feature = 'general-chat') => {
-        const { currentSession, currentModel } = get()
+        const { currentSession, currentModel, ollamaConnected, ollamaHost, ollamaPort } = get()
 
         if (!currentSession) {
           get().createSession()
@@ -405,6 +412,7 @@ export const useAIStore = create<AIStore>()(
 
         // 添加用户消息
         get().addMessage(sessionId, {
+          id:generateId(),
           role: 'user',
           content,
         })
@@ -412,21 +420,130 @@ export const useAIStore = create<AIStore>()(
         set({ isGenerating: true, currentFeature: feature })
 
         try {
-          // 这里应该实现实际的 AI 调用逻辑
-          await new Promise(resolve => setTimeout(resolve, 2000))
+          if (!ollamaConnected || !currentModel) {
+            throw new Error('AI 服务未连接或未选择模型')
+          }
 
-          // 模拟 AI 响应
-          const response = `这是一个模拟的 AI 响应，针对您的问题："${content}"。\n\n在实际实现中，这里会调用 ${currentModel?.name || 'AI 模型'} 来生成真实的响应。`
-
+          // 创建一个空的助手消息用于流式更新
+          const assistantMessageId = generateId()
           get().addMessage(sessionId, {
+            id: assistantMessageId,
             role: 'assistant',
-            content: response,
+            content: '',
+            metadata: {
+              query: content,
+              isStreaming: true,
+            },
           })
 
+          // 调用 Ollama API 流式输出
+          const response = await fetch(`http://${ollamaHost}:${ollamaPort}/api/generate`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              model: currentModel.modelName,
+              prompt: content,
+              stream: true,
+              options: {
+                temperature: currentModel.parameters?.temperature || 0.7,
+                num_predict: currentModel.parameters?.maxTokens || 2048,
+              }
+            })
+          })
+
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+          }
+
+          const reader = response.body?.getReader()
+          if (!reader) {
+            throw new Error('无法获取响应流')
+          }
+
+          const decoder = new TextDecoder()
+          let fullResponse = ''
+          let isThinking = false
+          let thinkContent = ''
+          let displayContent = ''
+
+          while (true) {
+            const { done, value } = await reader.read()
+            if (done) break
+
+            const chunk = decoder.decode(value)
+            const lines = chunk.split('\n').filter(line => line.trim())
+
+            for (const line of lines) {
+              try {
+                const data = JSON.parse(line)
+                if (data.response) {
+                  fullResponse += data.response
+                  
+                  // 处理 <think> 标签
+                  const thinkRegex = /<think>([\s\S]*?)<\/think>/g
+                  let match
+                  let processedContent = fullResponse
+                  
+                  // 移除所有 <think> 内容
+                  while ((match = thinkRegex.exec(fullResponse)) !== null) {
+                    thinkContent += match[1]
+                    processedContent = processedContent.replace(match[0], '')
+                  }
+                  
+                  // 检查是否在 <think> 标签内
+                  const openThinkIndex = fullResponse.lastIndexOf('<think>')
+                  const closeThinkIndex = fullResponse.lastIndexOf('</think>')
+                  isThinking = openThinkIndex > closeThinkIndex
+                  
+                  if (isThinking) {
+                    // 如果在思考中，只显示 <think> 之前的内容
+                    const beforeThink = fullResponse.substring(0, openThinkIndex)
+                    displayContent = beforeThink.replace(/<think>[\s\S]*?<\/think>/g, '')
+                  } else {
+                    // 显示处理后的内容（移除所有think标签）
+                    displayContent = processedContent
+                  }
+                  
+                  // 更新消息内容
+                  get().updateMessage(sessionId, assistantMessageId, {
+                    content: displayContent,
+                    metadata: {
+                      query: content,
+                      isStreaming: !data.done,
+                      thinkContent: thinkContent || undefined,
+                    },
+                  })
+                }
+                
+                if (data.done) {
+                  // 流式输出完成，最终处理
+                  const finalContent = displayContent || '抱歉，AI 没有返回有效响应。'
+                  get().updateMessage(sessionId, assistantMessageId, {
+                    content: finalContent,
+                    metadata: {
+                      query: content,
+                      executionTime: data.total_duration ? Math.round(data.total_duration / 1000000) : undefined,
+                      thinkContent: thinkContent || undefined,
+                      isStreaming: false,
+                    },
+                  })
+                  break
+                }
+              } catch (parseError) {
+                console.warn('解析流式响应失败:', parseError)
+              }
+            }
+          }
+
         } catch (error) {
+          console.error('AI 响应生成失败:', error)
+          
           get().addMessage(sessionId, {
+            id: generateId(),
             role: 'assistant',
-            content: '抱歉，生成响应时出现错误。请稍后重试。',
+            content: '抱歉，生成响应时出现错误。请检查网络连接或稍后重试。',
             metadata: {
               error: error instanceof Error ? error.message : '未知错误',
             },
@@ -583,6 +700,7 @@ export const useAIStore = create<AIStore>()(
       // 持久化会话、模型配置、连接状态和 Ollama 设置
       partialize: (state) => ({
         sessions: state.sessions,
+        currentSession: state.currentSession,
         currentModel: state.currentModel,
         ollamaConnected: state.ollamaConnected,
         ollamaHost: state.ollamaHost,
