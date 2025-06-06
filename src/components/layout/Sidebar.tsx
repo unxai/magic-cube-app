@@ -5,7 +5,6 @@ import {
   BarChart3, 
   Settings, 
   Search,
-  History,
   ChevronLeft,
   ChevronRight,
   Server
@@ -36,7 +35,7 @@ const navItems: NavItem[] = [
     icon: BarChart3,
   },
   {
-    id: 'search',
+    id: 'search-query',
     label: '搜索查询',
     icon: Search,
   },
@@ -54,12 +53,7 @@ const navItems: NavItem[] = [
     id: 'ai-chat',
     label: 'AI 助手',
     icon: MessageSquare,
-  },
-  {
-    id: 'history',
-    label: '查询历史',
-    icon: History,
-  },
+  }
 ]
 
 /**

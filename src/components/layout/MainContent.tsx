@@ -4,7 +4,6 @@ import { SearchQuery } from '@/components/pages/SearchQuery'
 import { IndexManagement } from '@/components/pages/IndexManagement'
 import { ClusterManagement } from '@/components/pages/ClusterManagement'
 import { AIChat } from '@/components/pages/AIChat'
-import { QueryHistory } from '@/components/pages/QueryHistory'
 import { Settings } from '@/components/pages/Settings'
 
 /**
@@ -21,7 +20,7 @@ export function MainContent() {
     switch (activeTab) {
       case 'dashboard':
         return <Dashboard />
-      case 'search':
+      case 'search-query':
         return <SearchQuery />
       case 'indices':
         return <IndexManagement />
@@ -29,8 +28,6 @@ export function MainContent() {
         return <ClusterManagement />
       case 'ai-chat':
         return <AIChat />
-      case 'history':
-        return <QueryHistory />
       case 'settings':
         return <Settings />
       default:

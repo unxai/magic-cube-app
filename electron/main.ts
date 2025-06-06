@@ -294,6 +294,36 @@ ipcMain.handle('elasticsearch:delete-index', async (_event, connection: Elastics
   }
 })
 
+/**
+ * 获取索引设置
+ */
+ipcMain.handle('elasticsearch:get-index-settings', async (_event, connection: ElasticsearchConnection, indexName: string) => {
+  try {
+    const client = createElasticsearchClient(connection)
+    const result = await client.indices.getSettings({
+      index: indexName
+    })
+    return result
+  } catch (error) {
+    throw new Error('获取索引设置失败: ' + (error instanceof Error ? error.message : '未知错误'))
+  }
+})
+
+/**
+ * 获取索引映射
+ */
+ipcMain.handle('elasticsearch:get-index-mapping', async (_event, connection: ElasticsearchConnection, indexName: string) => {
+  try {
+    const client = createElasticsearchClient(connection)
+    const result = await client.indices.getMapping({
+      index: indexName
+    })
+    return result
+  } catch (error) {
+    throw new Error('获取索引映射失败: ' + (error instanceof Error ? error.message : '未知错误'))
+  }
+})
+
 // 防止多个实例
 const gotTheLock = app.requestSingleInstanceLock()
 

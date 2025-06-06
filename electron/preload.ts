@@ -39,6 +39,8 @@ interface ElectronAPI {
     executeQuery: (connection: ElasticsearchConnection, index: string, queryBody: any) => Promise<any>
     createIndex: (connection: ElasticsearchConnection, name: string, settings?: any) => Promise<any>
     deleteIndex: (connection: ElasticsearchConnection, name: string) => Promise<any>
+    getIndexSettings: (connection: ElasticsearchConnection, indexName: string) => Promise<any>
+    getIndexMapping: (connection: ElasticsearchConnection, indexName: string) => Promise<any>
     ping: (connection: ElasticsearchConnection) => Promise<boolean>
   }
 }
@@ -82,6 +84,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
     },
     deleteIndex: (connection: ElasticsearchConnection, name: string) => {
       return ipcRenderer.invoke('elasticsearch:delete-index', connection, name)
+    },
+    getIndexSettings: (connection: ElasticsearchConnection, indexName: string) => {
+      return ipcRenderer.invoke('elasticsearch:get-index-settings', connection, indexName)
+    },
+    getIndexMapping: (connection: ElasticsearchConnection, indexName: string) => {
+      return ipcRenderer.invoke('elasticsearch:get-index-mapping', connection, indexName)
     },
     ping: (connection: ElasticsearchConnection) => {
       return ipcRenderer.invoke('elasticsearch:ping', connection)

@@ -157,7 +157,7 @@ export function Header() {
     switch (activeTab) {
       case 'dashboard':
         return '仪表板'
-      case 'search':
+      case 'search-query':
         return '搜索查询'
       case 'indices':
         return '索引管理'
@@ -165,8 +165,6 @@ export function Header() {
         return '集群管理'
       case 'ai-chat':
         return 'AI 助手'
-      case 'history':
-        return '查询历史'
       case 'settings':
         return '设置'
       default:

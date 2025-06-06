@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import React, { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -7,8 +7,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
-import { Database, Plus, Trash2, RefreshCw, Settings, MoreHorizontal, Search } from 'lucide-react'
+import { Textarea } from '@/components/ui/textarea'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import { Database, Plus, Trash2, RefreshCw, Settings, MoreHorizontal, Search, ChevronDown, ChevronRight } from 'lucide-react'
 import { useElasticsearchStore } from '@/stores/elasticsearch-store'
 
 /**
@@ -19,11 +23,26 @@ export function IndexManagement() {
   const [newIndexName, setNewIndexName] = useState('')
   const [searchTerm, setSearchTerm] = useState('')
   const [isCreating, setIsCreating] = useState(false)
+  const [selectedIndex, setSelectedIndex] = useState<string | null>(null)
+  const [indexSettings, setIndexSettings] = useState<any>(null)
+  const [indexMapping, setIndexMapping] = useState<any>(null)
+  const [isSettingsDialogOpen, setIsSettingsDialogOpen] = useState(false)
+  const [isMappingDialogOpen, setIsMappingDialogOpen] = useState(false)
+  const [isLoadingSettings, setIsLoadingSettings] = useState(false)
+  const [isLoadingMapping, setIsLoadingMapping] = useState(false)
   
-  const { indices, isLoading, createIndex, deleteIndex, refreshIndices } = useElasticsearchStore()
+  // 创建索引高级设置
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
+  const [numberOfShards, setNumberOfShards] = useState('1')
+  const [numberOfReplicas, setNumberOfReplicas] = useState('0')
+  const [customSettings, setCustomSettings] = useState('')
+  const [customMapping, setCustomMapping] = useState('')
+  const [isAdvancedSettingsOpen, setIsAdvancedSettingsOpen] = useState(false)
+  
+  const { indices, isLoading, createIndex, deleteIndex, refreshIndices, getIndexSettings, getIndexMapping } = useElasticsearchStore()
 
   /**
-   * 创建新索引
+   * 创建新索引（简单模式）
    */
   const handleCreateIndex = async () => {
     if (!newIndexName.trim()) {
@@ -36,6 +55,62 @@ export function IndexManagement() {
       setNewIndexName('')
     } catch (error) {
       console.error('Failed to create index:', error)
+    } finally {
+      setIsCreating(false)
+    }
+  }
+
+  /**
+   * 创建新索引（高级模式）
+   */
+  const handleCreateIndexAdvanced = async () => {
+    if (!newIndexName.trim()) {
+      return
+    }
+
+    setIsCreating(true)
+    try {
+      // 构建索引设置
+      const settings: any = {
+        settings: {
+          number_of_shards: parseInt(numberOfShards) || 1,
+          number_of_replicas: parseInt(numberOfReplicas) || 0
+        }
+      }
+
+      // 添加自定义设置
+      if (customSettings.trim()) {
+        try {
+          const parsedSettings = JSON.parse(customSettings)
+          settings.settings = { ...settings.settings, ...parsedSettings }
+        } catch (error) {
+          throw new Error('自定义设置 JSON 格式错误')
+        }
+      }
+
+      // 添加自定义映射
+      if (customMapping.trim()) {
+        try {
+          const parsedMapping = JSON.parse(customMapping)
+          settings.mappings = parsedMapping
+        } catch (error) {
+          throw new Error('自定义映射 JSON 格式错误')
+        }
+      }
+
+      await createIndex(newIndexName.trim(), settings)
+      
+      // 重置表单
+      setNewIndexName('')
+      setNumberOfShards('1')
+      setNumberOfReplicas('0')
+      setCustomSettings('')
+      setCustomMapping('')
+      setIsCreateDialogOpen(false)
+      setIsAdvancedSettingsOpen(false)
+    } catch (error) {
+      console.error('Failed to create index:', error)
+      alert(error instanceof Error ? error.message : '创建索引失败')
     } finally {
       setIsCreating(false)
     }
@@ -57,6 +132,44 @@ export function IndexManagement() {
    */
   const handleRefresh = () => {
     refreshIndices()
+  }
+
+  /**
+   * 查看索引设置
+   */
+  const handleViewSettings = async (indexName: string) => {
+    setSelectedIndex(indexName)
+    setIsLoadingSettings(true)
+    setIsSettingsDialogOpen(true)
+    
+    try {
+      const settings = await getIndexSettings(indexName)
+      setIndexSettings(settings)
+    } catch (error) {
+      console.error('获取索引设置失败:', error)
+      setIndexSettings({ error: '获取设置失败: ' + (error instanceof Error ? error.message : '未知错误') })
+    } finally {
+      setIsLoadingSettings(false)
+    }
+  }
+
+  /**
+   * 查看索引映射
+   */
+  const handleViewMapping = async (indexName: string) => {
+    setSelectedIndex(indexName)
+    setIsLoadingMapping(true)
+    setIsMappingDialogOpen(true)
+    
+    try {
+      const mapping = await getIndexMapping(indexName)
+      setIndexMapping(mapping)
+    } catch (error) {
+      console.error('获取索引映射失败:', error)
+      setIndexMapping({ error: '获取映射失败: ' + (error instanceof Error ? error.message : '未知错误') })
+    } finally {
+      setIsLoadingMapping(false)
+    }
   }
 
   /**
@@ -131,8 +244,150 @@ export function IndexManagement() {
               onClick={handleCreateIndex}
               disabled={!newIndexName.trim() || isCreating}
             >
-              {isCreating ? '创建中...' : '创建索引'}
+              {isCreating ? '创建中...' : '快速创建'}
             </Button>
+            <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline" disabled={isCreating}>
+                  <Settings className="h-4 w-4 mr-2" />
+                  高级设置
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-4xl max-h-[90vh]">
+                <DialogHeader>
+                  <DialogTitle>创建索引 - 高级设置</DialogTitle>
+                  <DialogDescription>
+                    配置索引的详细设置，包括分片数、副本数、映射等
+                  </DialogDescription>
+                </DialogHeader>
+                <ScrollArea className="h-[70vh] pr-4">
+                  <div className="space-y-6">
+                    {/* 基本设置 */}
+                    <div className="space-y-4">
+                      <h3 className="text-lg font-semibold">基本设置</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="advanced-index-name">索引名称 *</Label>
+                          <Input
+                            id="advanced-index-name"
+                            placeholder="输入索引名称..."
+                            value={newIndexName}
+                            onChange={(e) => setNewIndexName(e.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="shards">分片数</Label>
+                          <Input
+                            id="shards"
+                            type="number"
+                            min="1"
+                            max="1000"
+                            value={numberOfShards}
+                            onChange={(e) => setNumberOfShards(e.target.value)}
+                            placeholder="1"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="replicas">副本数</Label>
+                          <Input
+                            id="replicas"
+                            type="number"
+                            min="0"
+                            max="10"
+                            value={numberOfReplicas}
+                            onChange={(e) => setNumberOfReplicas(e.target.value)}
+                            placeholder="0"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 高级设置 */}
+                    <Collapsible open={isAdvancedSettingsOpen} onOpenChange={setIsAdvancedSettingsOpen}>
+                      <CollapsibleTrigger className="flex items-center space-x-2 text-lg font-semibold hover:text-primary">
+                        {isAdvancedSettingsOpen ? (
+                          <ChevronDown className="h-4 w-4" />
+                        ) : (
+                          <ChevronRight className="h-4 w-4" />
+                        )}
+                        <span>高级配置</span>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent className="space-y-4 mt-4">
+                        <Tabs defaultValue="settings" className="w-full">
+                          <TabsList className="grid w-full grid-cols-2">
+                            <TabsTrigger value="settings">自定义设置</TabsTrigger>
+                            <TabsTrigger value="mappings">字段映射</TabsTrigger>
+                          </TabsList>
+                          <TabsContent value="settings" className="space-y-4">
+                            <div className="space-y-2">
+                              <Label htmlFor="custom-settings">自定义设置 (JSON)</Label>
+                              <Textarea
+                                id="custom-settings"
+                                placeholder={`{
+  "analysis": {
+    "analyzer": {
+      "my_analyzer": {
+        "type": "standard"
+      }
+    }
+  }
+}`}
+                                value={customSettings}
+                                onChange={(e) => setCustomSettings(e.target.value)}
+                                className="min-h-[200px] font-mono text-sm"
+                              />
+                              <p className="text-sm text-muted-foreground">
+                                输入有效的 JSON 格式的索引设置。这些设置将与基本设置合并。
+                              </p>
+                            </div>
+                          </TabsContent>
+                          <TabsContent value="mappings" className="space-y-4">
+                            <div className="space-y-2">
+                              <Label htmlFor="custom-mapping">字段映射 (JSON)</Label>
+                              <Textarea
+                                id="custom-mapping"
+                                placeholder={`{
+  "properties": {
+    "title": {
+      "type": "text",
+      "analyzer": "standard"
+    },
+    "created_at": {
+      "type": "date"
+    }
+  }
+}`}
+                                value={customMapping}
+                                onChange={(e) => setCustomMapping(e.target.value)}
+                                className="min-h-[200px] font-mono text-sm"
+                              />
+                              <p className="text-sm text-muted-foreground">
+                                定义索引的字段映射结构。留空将使用动态映射。
+                              </p>
+                            </div>
+                          </TabsContent>
+                        </Tabs>
+                      </CollapsibleContent>
+                    </Collapsible>
+                  </div>
+                </ScrollArea>
+                <div className="flex justify-end space-x-2 pt-4 border-t">
+                  <Button
+                    variant="outline"
+                    onClick={() => setIsCreateDialogOpen(false)}
+                    disabled={isCreating}
+                  >
+                    取消
+                  </Button>
+                  <Button
+                    onClick={handleCreateIndexAdvanced}
+                    disabled={!newIndexName.trim() || isCreating}
+                  >
+                    {isCreating ? '创建中...' : '创建索引'}
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
           </div>
         </CardContent>
       </Card>
@@ -215,11 +470,11 @@ export function IndexManagement() {
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
                             <DropdownMenuLabel>操作</DropdownMenuLabel>
-                            <DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleViewSettings(index.index)}>
                               <Settings className="mr-2 h-4 w-4" />
                               查看设置
                             </DropdownMenuItem>
-                            <DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleViewMapping(index.index)}>
                               <Search className="mr-2 h-4 w-4" />
                               查看映射
                             </DropdownMenuItem>
@@ -263,6 +518,60 @@ export function IndexManagement() {
           </ScrollArea>
         </CardContent>
       </Card>
+
+      {/* 索引设置对话框 */}
+      <Dialog open={isSettingsDialogOpen} onOpenChange={setIsSettingsDialogOpen}>
+        <DialogContent className="max-w-4xl max-h-[80vh]">
+          <DialogHeader>
+            <DialogTitle>索引设置 - {selectedIndex}</DialogTitle>
+            <DialogDescription>
+              查看索引的详细配置设置
+            </DialogDescription>
+          </DialogHeader>
+          <ScrollArea className="h-[60vh] w-full">
+            {isLoadingSettings ? (
+              <div className="flex items-center justify-center h-32">
+                <div className="text-muted-foreground">加载中...</div>
+              </div>
+            ) : indexSettings?.error ? (
+              <div className="text-red-600 p-4 bg-red-50 rounded-md">
+                {indexSettings.error}
+              </div>
+            ) : (
+              <pre className="text-sm bg-muted p-4 rounded-md overflow-auto">
+                {JSON.stringify(indexSettings, null, 2)}
+              </pre>
+            )}
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
+
+      {/* 索引映射对话框 */}
+      <Dialog open={isMappingDialogOpen} onOpenChange={setIsMappingDialogOpen}>
+        <DialogContent className="max-w-4xl max-h-[80vh]">
+          <DialogHeader>
+            <DialogTitle>索引映射 - {selectedIndex}</DialogTitle>
+            <DialogDescription>
+              查看索引的字段映射配置
+            </DialogDescription>
+          </DialogHeader>
+          <ScrollArea className="h-[60vh] w-full">
+            {isLoadingMapping ? (
+              <div className="flex items-center justify-center h-32">
+                <div className="text-muted-foreground">加载中...</div>
+              </div>
+            ) : indexMapping?.error ? (
+              <div className="text-red-600 p-4 bg-red-50 rounded-md">
+                {indexMapping.error}
+              </div>
+            ) : (
+              <pre className="text-sm bg-muted p-4 rounded-md overflow-auto">
+                {JSON.stringify(indexMapping, null, 2)}
+              </pre>
+            )}
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

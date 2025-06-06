@@ -126,6 +126,8 @@ interface ElasticsearchActions {
   executeQuery: (index: string, queryBody: any) => Promise<any>
   createIndex: (name: string, settings?: any) => Promise<any>
   deleteIndex: (name: string) => Promise<any>
+  getIndexSettings: (indexName: string) => Promise<any>
+  getIndexMapping: (indexName: string) => Promise<any>
   refreshIndices: () => Promise<void>
   
   // 查询历史
@@ -357,6 +359,46 @@ export const useElasticsearchStore = create<ElasticsearchStore>()(
       
       refreshIndices: async () => {
         await get().fetchIndices()
+      },
+      
+      /**
+       * 获取索引设置
+       */
+      getIndexSettings: async (indexName) => {
+        try {
+          const connection = get().currentConnection
+          if (!connection) {
+            throw new Error('未连接到 Elasticsearch')
+          }
+          
+          const elasticsearchAPI = getElasticsearchAPI()
+          const result = await elasticsearchAPI.getIndexSettings(connection, indexName)
+          
+          return result
+        } catch (error) {
+          console.error('获取索引设置失败:', error)
+          throw error
+        }
+      },
+      
+      /**
+       * 获取索引映射
+       */
+      getIndexMapping: async (indexName) => {
+        try {
+          const connection = get().currentConnection
+          if (!connection) {
+            throw new Error('未连接到 Elasticsearch')
+          }
+          
+          const elasticsearchAPI = getElasticsearchAPI()
+          const result = await elasticsearchAPI.getIndexMapping(connection, indexName)
+          
+          return result
+        } catch (error) {
+          console.error('获取索引映射失败:', error)
+          throw error
+        }
       },
       
       // 查询历史

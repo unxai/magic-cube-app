@@ -10,7 +10,6 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import {  Bot, Palette, Download, Upload, Trash2, Save, TestTube } from 'lucide-react'
 import { useTheme } from '@/components/theme-provider'
 import { useAIStore } from '@/stores/ai-store'
-import { ClusterManagement } from '@/components/pages/ClusterManagement'
 
 /**
  * 设置页面组件
@@ -175,17 +174,11 @@ export function Settings() {
         </div>
       </div>
 
-      <Tabs defaultValue="cluster" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="cluster">集群管理</TabsTrigger>
+      <Tabs defaultValue="ollama" className="space-y-6">
+        <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="ollama">Ollama 配置</TabsTrigger>
           <TabsTrigger value="appearance">外观</TabsTrigger>
         </TabsList>
-
-        {/* 集群管理 */}
-        <TabsContent value="cluster" className="space-y-6">
-          <ClusterManagement />
-        </TabsContent>
 
         {/* Ollama 配置 */}
         <TabsContent value="ollama" className="space-y-6">

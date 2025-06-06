@@ -41,6 +41,8 @@ declare global {
         executeQuery: (connection: ElasticsearchConnection, index: string, queryBody: any) => Promise<any>
         createIndex: (connection: ElasticsearchConnection, name: string, settings?: any) => Promise<any>
         deleteIndex: (connection: ElasticsearchConnection, name: string) => Promise<any>
+        getIndexSettings: (connection: ElasticsearchConnection, indexName: string) => Promise<any>
+        getIndexMapping: (connection: ElasticsearchConnection, indexName: string) => Promise<any>
         ping: (connection: ElasticsearchConnection) => Promise<boolean>
       }
     };
