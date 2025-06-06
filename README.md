@@ -3,25 +3,41 @@
   
   # Magic Cube App
   
-  **🎯 一款基于本地 AI（Ollama）与 Elasticsearch 的智能开发辅助工具**
+  **🎯 让 Elasticsearch 操作更轻松的智能助手**
+  
+  *基于本地 Ollama AI，为 Elasticsearch 用户提供直观、智能的数据操作体验*
 </div>  
 
-## ✨ 特性
+## 🌟 为什么选择 Magic Cube？
 
-- 🤖 **本地 AI 集成**: 基于 Ollama 的本地大语言模型支持
-- 🔍 **Elasticsearch 集成**: 强大的搜索和数据分析能力
-- 💻 **跨平台桌面应用**: 基于 Electron 构建，支持 Windows、macOS、Linux
-- ⚡ **现代化界面**: 使用 React + TypeScript + Tailwind CSS 构建
-- 🎨 **美观的 UI**: 基于 Radix UI 组件库的现代化设计
-- 🌙 **主题支持**: 内置明暗主题切换
-- 📊 **数据可视化**: 集成图表和数据展示组件
+**传统 Elasticsearch 操作的痛点：**
+- 复杂的 DSL 查询语法难以掌握
+- 命令行操作不够直观
+- 数据分析结果难以可视化
+- 缺乏智能化的操作建议
+
+**Magic Cube 的解决方案：**
+- 🤖 **AI 智能助手**: 基于本地 Ollama，用自然语言描述需求，自动生成 ES 查询
+- 🎯 **简化操作流程**: 将复杂的 Elasticsearch 操作转化为简单的对话
+- 🔒 **本地化部署**: 数据不出本地，保障安全性
+- ⚡ **即时响应**: 本地 AI 模型，无需网络依赖
+
+## ✨ 核心特性
+
+- 🤖 **智能查询生成**: 通过自然语言对话，自动生成 Elasticsearch DSL 查询
+- 🔍 **多集群管理**: 轻松连接和切换多个 Elasticsearch 集群
+- 📈 **数据可视化**: 查询结果自动转换为表格等可视化形式
+- 💬 **对话式操作**: 像聊天一样操作 Elasticsearch，降低学习成本
+- 🛡️ **本地 AI**: 基于 Ollama 的完全本地化 AI，保护数据隐私
+- 💻 **跨平台支持**: 支持 Windows、macOS、Linux 桌面环境
+- 🎨 **现代化界面**: 基于 React + Tailwind CSS 的美观界面
 
 ## 🚀 快速开始
 
 ### 环境要求
 
-- Node.js 18+
-- npm 或 yarn
+- Node.js 22+
+- npm
 - Ollama（用于本地 AI 功能）
 - Elasticsearch（用于搜索功能）
 
@@ -61,49 +77,47 @@ npm run build
 npm run electron:pack
 ```
 
-## 📖 使用说明
+## 📖 使用指南
 
-### AI 聊天功能
+### 🚀 首次使用
 
-1. 确保 Ollama 已安装并运行
-2. 在应用中选择合适的 AI 模型
-3. 开始与 AI 进行对话
+1. **安装 Ollama**
+   ```bash
+   # macOS
+   brew install ollama
+   
+   # 启动 Ollama 服务
+   ollama serve
+   
+   # 下载推荐模型（如 qwen3:14b 或 deepseek-r1:14b）
+   ollama pull qwen3:14b
+   ```
 
-### Elasticsearch 集成
+2. **配置 Elasticsearch 连接**
+   - 打开应用，点击「集群配置」
+   - 输入 Elasticsearch 地址（如：http://localhost:9200）
+   - 配置认证信息（如需要）
+   - 测试连接
 
-1. 配置 Elasticsearch 连接信息
-2. 选择要操作的集群和索引
-3. 使用搜索和分析功能
+### 💬 智能对话操作
 
-## 🛠️ 技术栈
-
-- **前端框架**: React 18 + TypeScript
-- **桌面应用**: Electron
-- **样式**: Tailwind CSS
-- **UI 组件**: Radix UI
-- **状态管理**: Zustand
-- **构建工具**: Vite
-- **代码规范**: ESLint + Prettier
-
-## 📁 项目结构
+**示例对话：**
 
 ```
-magic-cube-app/
-├── electron/           # Electron 主进程代码
-│   ├── main.ts        # 主进程入口
-│   ├── preload.ts     # 预加载脚本
-│   └── utils.ts       # 工具函数
-├── src/               # 渲染进程代码
-│   ├── components/    # React 组件
-│   │   ├── layout/    # 布局组件
-│   │   ├── pages/     # 页面组件
-│   │   └── ui/        # UI 组件
-│   ├── hooks/         # 自定义 Hooks
-│   ├── lib/           # 工具库
-│   ├── stores/        # 状态管理
-│   └── types/         # 类型定义
-├── static/            # 静态资源
-└── dist/              # 构建输出
+用户："查询最近7天的错误日志"
+AI：我来帮你生成查询语句...
+
+生成的查询：
+{
+  "query": {
+    "bool": {
+      "must": [
+        {"match": {"level": "error"}},
+        {"range": {"@timestamp": {"gte": "now-7d"}}}
+      ]
+    }
+  }
+}
 ```
 
 ## 🤝 贡献

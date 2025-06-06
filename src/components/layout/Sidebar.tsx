@@ -51,7 +51,7 @@ const navItems: NavItem[] = [
   },
   {
     id: 'ai-chat',
-    label: 'AI 助手',
+    label: 'AI 聊天',
     icon: MessageSquare,
   }
 ]

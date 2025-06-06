@@ -1,711 +1,994 @@
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
+import { devtools, persist } from 'zustand/middleware'
 
-/**
- * AI 模型配置
- */
-export interface AIModel {
+// AI模型接口
+interface AIModel {
   id: string
   name: string
-  description: string
-  provider: 'ollama' | 'openai' | 'anthropic'
   modelName: string
-  isAvailable: boolean
-  parameters?: {
-    temperature?: number
-    maxTokens?: number
-    topP?: number
-    topK?: number
-  }
+  displayName: string
+  description?: string
+  size?: string
+  parameters?: string
+  isAvailable?: boolean
 }
 
-/**
- * 聊天消息
- */
-export interface ChatMessage {
+// AI聊天消息接口
+interface ChatMessage {
   id: string
   role: 'user' | 'assistant' | 'system'
   content: string
-  timestamp: string
-  metadata?: {
-    query?: string
-    generatedDSL?: string
-    executionTime?: number
-    error?: string
-    isStreaming?: boolean
-    thinkContent?: string
-  }
+  timestamp: Date
+  isStreaming?: boolean
+  thinkContent?: string
+  executionTime?: number
 }
 
-/**
- * 聊天会话
- */
-export interface ChatSession {
+// AI聊天会话接口
+interface ChatSession {
   id: string
   title: string
   messages: ChatMessage[]
-  createdAt: string
-  updatedAt: string
-  model: string
+  createdAt: Date
+  updatedAt: Date
 }
 
-/**
- * AI 功能类型
- */
-export type AIFeature =
-  | 'query-generation'    // 查询生成
-  | 'data-analysis'       // 数据分析
-  | 'query-optimization'  // 查询优化
-  | 'error-explanation'   // 错误解释
-  | 'general-chat'        // 通用聊天
-
-/**
- * AI 状态接口
- */
+// AI Store状态接口
 interface AIState {
+  // 连接状态
+  isConnected: boolean
+  isConnecting: boolean
+  connectionError: string | null
+  ollamaConnected: boolean
+  
+  // Ollama配置
+  ollamaHost: string
+  ollamaPort: number
+  
   // 模型管理
   availableModels: AIModel[]
   currentModel: AIModel | null
+  isLoadingModels: boolean
   isModelLoading: boolean
-
-  // 聊天会话
-  sessions: ChatSession[]
+  
+  // 聊天功能
+  chatSessions: ChatSession[]
+  currentSessionId: string | null
   currentSession: ChatSession | null
-
-  // 当前对话状态
+  sessions: ChatSession[]
   isGenerating: boolean
-  currentFeature: AIFeature
-
-  // Ollama 连接状态
-  ollamaConnected: boolean
-  ollamaHost: string
-  ollamaPort: number
-
-  // 错误状态
-  error: string | null
+  
+  // 新增AI功能状态
+  smartQueryResult: {
+    query: string
+    explanation: string
+    suggestions: string[]
+  } | null
+  performanceAnalysis: {
+    optimizations: string[]
+    indexSuggestions: string[]
+    report: string
+  } | null
+  errorDiagnosis: {
+    diagnosis: string
+    solutions: string[]
+    prevention: string[]
+  } | null
 }
 
-/**
- * AI 操作接口
- */
+// AI Store动作接口
 interface AIActions {
+  // 连接管理
+  connect: () => Promise<void>
+  connectToOllama: (host: string, port: number) => Promise<void>
+  disconnect: () => void
+  setOllamaConfig: (host: string, port: number) => void
+  
   // 模型管理
-  setAvailableModels: (models: AIModel[]) => void
-  setCurrentModel: (model: AIModel | null) => void
+  loadModels: () => Promise<void>
   fetchAvailableModels: () => Promise<void>
-
-  // 会话管理
-  createSession: (title?: string, model?: string) => ChatSession
+  selectModel: (model: AIModel) => void
+  setCurrentModel: (model: AIModel) => void
+  
+  // 聊天功能
+  createSession: (title?: string) => string
+  selectSession: (sessionId: string) => void
+  setCurrentSession: (sessionId: string) => void
   deleteSession: (sessionId: string) => void
-  setCurrentSession: (session: ChatSession | null) => void
-  updateSessionTitle: (sessionId: string, title: string) => void
-
-  // 消息管理
-  addMessage: (sessionId: string, message: Omit<ChatMessage, 'timestamp'>) => void
-  updateMessage: (sessionId: string, messageId: string, updates: Partial<ChatMessage>) => void
+  sendMessage: (content: string, sessionId?: string) => Promise<void>
+  streamMessage: (content: string, sessionId?: string, onUpdate?: (content: string) => void) => Promise<void>
+  clearSessions: () => void
   clearMessages: (sessionId: string) => void
-
-  // AI 交互
-  sendMessage: (content: string, feature?: AIFeature) => Promise<void>
-  generateDSLQuery: (naturalLanguage: string, context?: any) => Promise<string>
-  analyzeData: (data: any, question: string) => Promise<string>
-  optimizeQuery: (query: string) => Promise<string>
-  explainError: (error: string, context?: any) => Promise<string>
-
-  // Ollama 连接
-  connectToOllama: (host?: string, port?: number) => Promise<void>
-  disconnectFromOllama: () => void
-  testOllamaConnection: () => Promise<boolean>
-
-  // 功能设置
-  setCurrentFeature: (feature: AIFeature) => void
-
-  // 错误处理
-  setError: (error: string | null) => void
-  clearError: () => void
+  
+  // 新增AI功能
+  buildSmartQuery: (naturalLanguage: string, indexContext?: any) => Promise<{
+    query: string
+    explanation: string
+    suggestions: string[]
+  }>
+  buildSmartQueryStream: (naturalLanguage: string, indexContext?: any, onUpdate?: (content: string) => void) => Promise<{
+    query: string
+    explanation: string
+    suggestions: string[]
+  }>
+  analyzeQueryPerformance: (queryBody: any, queryResults: any) => Promise<{
+    optimizations: string[]
+    indexSuggestions: string[]
+    report: string
+  }>
+  diagnoseError: (error: any, queryContext?: any) => Promise<{
+    diagnosis: string
+    solutions: string[]
+    prevention: string[]
+  }>
+  getBestPractices: (queryType: string, dataCharacteristics?: any) => Promise<{
+    practices: string[]
+    examples: string[]
+    warnings: string[]
+  }>
 }
 
-/**
- * AI Store 类型
- */
-export type AIStore = AIState & AIActions
+type AIStore = AIState & AIActions
 
 /**
- * 初始状态
+ * 创建AI Store
+ * 使用persist中间件进行数据持久化，确保聊天历史记录在页面刷新后不丢失
  */
-const initialState: AIState = {
-  availableModels: [],
-  currentModel: null,
-  isModelLoading: false,
-  sessions: [],
-  currentSession: null,
-  isGenerating: false,
-  currentFeature: 'general-chat',
-  ollamaConnected: false,
-  ollamaHost: 'localhost',
-  ollamaPort: 11434,
-  error: null,
-}
-
-/**
- * 生成唯一 ID
- */
-function generateId(): string {
-  return Date.now().toString(36) + Math.random().toString(36).slice(2, 11)
-}
-
-/**
- * 默认可用模型
- */
-const defaultModels: AIModel[] = [
-  {
-    id: 'llama2',
-    name: 'Llama 2',
-    description: '强大的开源大语言模型，适合通用对话和代码生成',
-    provider: 'ollama',
-    modelName: 'llama2',
-    isAvailable: false,
-    parameters: {
-      temperature: 0.7,
-      maxTokens: 2048,
-    },
-  },
-  {
-    id: 'mistral',
-    name: 'Mistral',
-    description: '高效的开源模型，在代码和推理任务上表现优秀',
-    provider: 'ollama',
-    modelName: 'mistral',
-    isAvailable: false,
-    parameters: {
-      temperature: 0.5,
-      maxTokens: 4096,
-    },
-  },
-  {
-    id: 'codellama',
-    name: 'Code Llama',
-    description: '专门针对代码生成和理解优化的模型',
-    provider: 'ollama',
-    modelName: 'codellama',
-    isAvailable: false,
-    parameters: {
-      temperature: 0.3,
-      maxTokens: 4096,
-    },
-  },
-]
-
-/**
- * AI 状态管理 Store
- */
-export const useAIStore = create<AIStore>()(
+export const useAIStore = create<AIStore>()(devtools(
   persist(
-    (set, get) => ({
-      ...initialState,
-      availableModels: defaultModels,
+    (set, get) => {
+      // 辅助函数：更新计算属性
+      const updateComputedProperties = () => {
+        const state = get()
+        const currentSession = state.chatSessions.find(s => s.id === state.currentSessionId) || null
+        const sessions = state.chatSessions
+        set({ currentSession, sessions })
+      }
 
-      // 模型管理
-      setAvailableModels: (models) => {
-        set({ availableModels: models })
-      },
+      // 初始化时更新计算属性
+      setTimeout(() => updateComputedProperties(), 0)
 
-      setCurrentModel: (model) => {
-        set({ currentModel: model })
-      },
+      return {
+        // 初始状态
+        isConnected: false,
+        isConnecting: false,
+        connectionError: null,
+        ollamaConnected: false,
+        ollamaHost: 'localhost',
+        ollamaPort: 11434,
+        availableModels: [],
+        currentModel: null,
+        isLoadingModels: false,
+        isModelLoading: false,
+        chatSessions: [],
+        currentSessionId: null,
+        currentSession: null as ChatSession | null,
+        sessions: [] as ChatSession[],
+        isGenerating: false,
+        smartQueryResult: null,
+        performanceAnalysis: null,
+        errorDiagnosis: null,
 
-      fetchAvailableModels: async () => {
-        set({ isModelLoading: true })
-
-        try {
-          const { ollamaHost, ollamaPort } = get()
-          const response = await fetch(`http://${ollamaHost}:${ollamaPort}/api/tags`)
+        // 连接管理
+        connect: async () => {
+          set({ isConnecting: true, connectionError: null })
           
-          if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-          }
-
-          const data = await response.json()
-          const ollamaModels = data.models || []
-
-          // 将 Ollama 模型转换为我们的模型格式
-          const availableModels: AIModel[] = ollamaModels.map((model: any) => ({
-            id: model.name,
-            name: model.name,
-            description: `Ollama 模型: ${model.name}`,
-            provider: 'ollama' as const,
-            modelName: model.name,
-            isAvailable: true,
-            parameters: {
-              temperature: 0.7,
-              maxTokens: 2048,
-            },
-          }))
-
-          // 如果没有获取到模型，使用默认模型但标记为不可用
-          const modelsToSet = availableModels.length > 0 
-            ? availableModels 
-            : defaultModels.map(model => ({ ...model, isAvailable: false }))
-
-          set({
-            availableModels: modelsToSet,
-            isModelLoading: false,
-            error: null
-          })
-
-        } catch (error) {
-          console.error('获取 Ollama 模型失败:', error)
-          
-          // 连接失败时使用默认模型但标记为不可用
-          const unavailableModels = defaultModels.map(model => ({
-            ...model,
-            isAvailable: false
-          }))
-
-          set({
-            availableModels: unavailableModels,
-            isModelLoading: false,
-            error: `获取模型列表失败: ${error instanceof Error ? error.message : '未知错误'}`,
-            ollamaConnected: false
-          })
-        }
-      },
-
-      // 会话管理
-      createSession: (title, model) => {
-        const session: ChatSession = {
-          id: generateId(),
-          title: title || `会话 ${new Date().toLocaleString()}`,
-          messages: [],
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          model: model || get().currentModel?.id || 'llama2',
-        }
-
-        set((state) => ({
-          sessions: [session, ...state.sessions],
-          currentSession: session,
-        }))
-
-        return session
-      },
-
-      deleteSession: (sessionId) => {
-        set((state) => {
-          const newSessions = state.sessions.filter(s => s.id !== sessionId)
-          const newCurrentSession = state.currentSession?.id === sessionId
-            ? (newSessions[0] || null)
-            : state.currentSession
-
-          return {
-            sessions: newSessions,
-            currentSession: newCurrentSession,
-          }
-        })
-      },
-
-      setCurrentSession: (session) => {
-        set({ currentSession: session })
-      },
-
-      updateSessionTitle: (sessionId, title) => {
-        set((state) => ({
-          sessions: state.sessions.map(session =>
-            session.id === sessionId
-              ? { ...session, title, updatedAt: new Date().toISOString() }
-              : session
-          ),
-          currentSession: state.currentSession?.id === sessionId
-            ? { ...state.currentSession, title, updatedAt: new Date().toISOString() }
-            : state.currentSession,
-        }))
-      },
-
-      // 消息管理
-      /**
-       * 添加消息到指定会话
-       * @param sessionId 会话ID
-       * @param messageData 消息数据（可选包含id，不包含timestamp）
-       */
-      addMessage: (sessionId, messageData) => {
-        const message: ChatMessage = {
-          ...messageData,
-          id: messageData.id || generateId(),
-          timestamp: new Date().toISOString(),
-        }
-
-        set((state) => ({
-          sessions: state.sessions.map(session =>
-            session.id === sessionId
-              ? {
-                ...session,
-                messages: [...session.messages, message],
-                updatedAt: new Date().toISOString(),
-              }
-              : session
-          ),
-          currentSession: state.currentSession?.id === sessionId
-            ? {
-              ...state.currentSession,
-              messages: [...state.currentSession.messages, message],
-              updatedAt: new Date().toISOString(),
+          try {
+            const { ollamaHost, ollamaPort } = get()
+            const response = await fetch(`http://${ollamaHost}:${ollamaPort}/api/tags`)
+            
+            if (!response.ok) {
+              throw new Error(`HTTP ${response.status}: ${response.statusText}`)
             }
-            : state.currentSession,
-        }))
-      },
-
-      updateMessage: (sessionId, messageId, updates) => {
-        set((state) => ({
-          sessions: state.sessions.map(session =>
-            session.id === sessionId
-              ? {
-                ...session,
-                messages: session.messages.map(msg =>
-                  msg.id === messageId ? { ...msg, ...updates } : msg
-                ),
-                updatedAt: new Date().toISOString(),
-              }
-              : session
-          ),
-          currentSession: state.currentSession?.id === sessionId
-            ? {
-              ...state.currentSession,
-              messages: state.currentSession.messages.map(msg =>
-                msg.id === messageId ? { ...msg, ...updates } : msg
-              ),
-              updatedAt: new Date().toISOString(),
-            }
-            : state.currentSession,
-        }))
-      },
-
-      clearMessages: (sessionId) => {
-        set((state) => ({
-          sessions: state.sessions.map(session =>
-            session.id === sessionId
-              ? {
-                ...session,
-                messages: [],
-                updatedAt: new Date().toISOString(),
-              }
-              : session
-          ),
-          currentSession: state.currentSession?.id === sessionId
-            ? {
-              ...state.currentSession,
-              messages: [],
-              updatedAt: new Date().toISOString(),
-            }
-            : state.currentSession,
-        }))
-      },
-
-      // AI 交互
-      sendMessage: async (content, feature = 'general-chat') => {
-        const { currentSession, currentModel, ollamaConnected, ollamaHost, ollamaPort } = get()
-
-        if (!currentSession) {
-          get().createSession()
-        }
-
-        const sessionId = get().currentSession!.id
-
-        // 添加用户消息
-        get().addMessage(sessionId, {
-          id:generateId(),
-          role: 'user',
-          content,
-        })
-
-        set({ isGenerating: true, currentFeature: feature })
-
-        try {
-          if (!ollamaConnected || !currentModel) {
-            throw new Error('AI 服务未连接或未选择模型')
-          }
-
-          // 创建一个空的助手消息用于流式更新
-          const assistantMessageId = generateId()
-          get().addMessage(sessionId, {
-            id: assistantMessageId,
-            role: 'assistant',
-            content: '',
-            metadata: {
-              query: content,
-              isStreaming: true,
-            },
-          })
-
-          // 调用 Ollama API 流式输出
-          const response = await fetch(`http://${ollamaHost}:${ollamaPort}/api/generate`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              model: currentModel.modelName,
-              prompt: content,
-              stream: true,
-              options: {
-                temperature: currentModel.parameters?.temperature || 0.7,
-                num_predict: currentModel.parameters?.maxTokens || 2048,
-              }
+            
+            set({ isConnected: true, isConnecting: false, ollamaConnected: true })
+            
+            // 自动加载模型列表
+            await get().loadModels()
+            
+          } catch (error) {
+            set({ 
+              isConnected: false, 
+              isConnecting: false,
+              ollamaConnected: false,
+              connectionError: error instanceof Error ? error.message : '连接失败'
             })
+            throw error
+          }
+        },
+
+        connectToOllama: async (host: string, port: number) => {
+          set({ ollamaHost: host, ollamaPort: port })
+          await get().connect()
+        },
+
+        disconnect: () => {
+          set({ 
+            isConnected: false, 
+            ollamaConnected: false,
+            connectionError: null,
+            availableModels: [],
+            currentModel: null
           })
+        },
 
-          if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+        setOllamaConfig: (host: string, port: number) => {
+          set({ ollamaHost: host, ollamaPort: port })
+        },
+
+        // 模型管理
+        loadModels: async () => {
+          const { ollamaHost, ollamaPort } = get()
+          set({ isLoadingModels: true, isModelLoading: true })
+          
+          try {
+            const response = await fetch(`http://${ollamaHost}:${ollamaPort}/api/tags`)
+            
+            if (!response.ok) {
+              throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+            }
+            
+            const data = await response.json()
+            const models: AIModel[] = data.models?.map((model: any) => ({
+              id: model.name,
+              name: model.name,
+              modelName: model.name,
+              displayName: model.name,
+              description: model.details?.family || '',
+              size: model.size ? `${(model.size / 1024 / 1024 / 1024).toFixed(1)}GB` : '',
+              parameters: model.details?.parameter_size || '',
+              isAvailable: true
+            })) || []
+            
+            set({ availableModels: models, isLoadingModels: false, isModelLoading: false })
+            
+            // 如果没有选择模型且有可用模型，自动选择第一个
+            if (!get().currentModel && models.length > 0) {
+              set({ currentModel: models[0] })
+            }
+            
+          } catch (error) {
+            set({ isLoadingModels: false, isModelLoading: false })
+            throw error
           }
+        },
 
-          const reader = response.body?.getReader()
-          if (!reader) {
-            throw new Error('无法获取响应流')
+        fetchAvailableModels: async () => {
+          await get().loadModels()
+        },
+
+        selectModel: (model: AIModel) => {
+          set({ currentModel: model })
+        },
+
+        setCurrentModel: (model: AIModel) => {
+          set({ currentModel: model })
+        },
+
+        // 聊天功能
+        createSession: (title?: string) => {
+          const sessionId = `session_${Date.now()}`
+          const newSession: ChatSession = {
+            id: sessionId,
+            title: title || `对话 ${new Date().toLocaleString()}`,
+            messages: [],
+            createdAt: new Date(),
+            updatedAt: new Date()
           }
+          
+          set(state => ({
+            chatSessions: [newSession, ...state.chatSessions],
+            currentSessionId: sessionId
+          }))
+          
+          updateComputedProperties()
+          return sessionId
+        },
 
-          const decoder = new TextDecoder()
-          let fullResponse = ''
-          let isThinking = false
-          let thinkContent = ''
-          let displayContent = ''
+        selectSession: (sessionId: string) => {
+          set({ currentSessionId: sessionId })
+          updateComputedProperties()
+        },
 
-          while (true) {
-            const { done, value } = await reader.read()
-            if (done) break
+        setCurrentSession: (sessionId: string) => {
+          set({ currentSessionId: sessionId })
+          updateComputedProperties()
+        },
 
-            const chunk = decoder.decode(value)
-            const lines = chunk.split('\n').filter(line => line.trim())
+        deleteSession: (sessionId: string) => {
+          set(state => {
+            const newSessions = state.chatSessions.filter(s => s.id !== sessionId)
+            const newCurrentSessionId = state.currentSessionId === sessionId 
+              ? (newSessions.length > 0 ? newSessions[0].id : null)
+              : state.currentSessionId
+            
+            return {
+              chatSessions: newSessions,
+              currentSessionId: newCurrentSessionId
+            }
+          })
+          updateComputedProperties()
+        },
 
-            for (const line of lines) {
-              try {
-                const data = JSON.parse(line)
-                if (data.response) {
-                  fullResponse += data.response
-                  
-                  // 处理 <think> 标签
-                  const thinkRegex = /<think>([\s\S]*?)<\/think>/g
-                  let match
-                  let processedContent = fullResponse
-                  
-                  // 移除所有 <think> 内容
-                  while ((match = thinkRegex.exec(fullResponse)) !== null) {
-                    thinkContent += match[1]
-                    processedContent = processedContent.replace(match[0], '')
-                  }
-                  
-                  // 检查是否在 <think> 标签内
-                  const openThinkIndex = fullResponse.lastIndexOf('<think>')
-                  const closeThinkIndex = fullResponse.lastIndexOf('</think>')
-                  isThinking = openThinkIndex > closeThinkIndex
-                  
-                  if (isThinking) {
-                    // 如果在思考中，只显示 <think> 之前的内容
-                    const beforeThink = fullResponse.substring(0, openThinkIndex)
-                    displayContent = beforeThink.replace(/<think>[\s\S]*?<\/think>/g, '')
-                  } else {
-                    // 显示处理后的内容（移除所有think标签）
-                    displayContent = processedContent
-                  }
-                  
-                  // 更新消息内容
-                  get().updateMessage(sessionId, assistantMessageId, {
-                    content: displayContent,
-                    metadata: {
-                      query: content,
-                      isStreaming: !data.done,
-                      thinkContent: thinkContent || undefined,
-                    },
-                  })
-                }
+        sendMessage: async (content: string, sessionId?: string) => {
+          const { currentSessionId, currentModel, ollamaHost, ollamaPort } = get()
+          const targetSessionId = sessionId || currentSessionId
+          
+          if (!targetSessionId) {
+            throw new Error('没有活动的聊天会话')
+          }
+          
+          if (!currentModel) {
+            throw new Error('未选择AI模型')
+          }
+          
+          // 添加用户消息
+          const userMessage: ChatMessage = {
+            id: `msg_${Date.now()}_user`,
+            role: 'user',
+            content,
+            timestamp: new Date()
+          }
+          
+          set(state => ({
+            chatSessions: state.chatSessions.map(session => 
+              session.id === targetSessionId
+                ? { ...session, messages: [...session.messages, userMessage], updatedAt: new Date() }
+                : session
+            ),
+            isGenerating: true
+          }))
+          updateComputedProperties()
+          
+          try {
+            // 获取会话历史
+            const session = get().chatSessions.find(s => s.id === targetSessionId)
+            const messages = session?.messages || []
+            
+            // 构建对话上下文
+            const prompt = messages.map(msg => 
+              `${msg.role === 'user' ? 'Human' : 'Assistant'}: ${msg.content}`
+            ).join('\n\n') + '\n\nAssistant: '
+            
+            const response = await fetch(`http://${ollamaHost}:${ollamaPort}/api/generate`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                model: currentModel.modelName,
+                prompt,
+                stream: false
+              })
+            })
+            
+            if (!response.ok) {
+              throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+            }
+            
+            const data = await response.json()
+            
+            // 添加AI回复
+            const assistantMessage: ChatMessage = {
+              id: `msg_${Date.now()}_assistant`,
+              role: 'assistant',
+              content: data.response || '抱歉，我无法生成回复。',
+              timestamp: new Date()
+            }
+            
+            set(state => ({
+              chatSessions: state.chatSessions.map(session => 
+                session.id === targetSessionId
+                  ? { ...session, messages: [...session.messages, assistantMessage], updatedAt: new Date() }
+                  : session
+              ),
+              isGenerating: false
+            }))
+            updateComputedProperties()
+            
+          } catch (error) {
+            set({ isGenerating: false })
+            throw error
+          }
+        },
+
+        streamMessage: async (content: string, sessionId?: string, onUpdate?: (content: string) => void) => {
+          const { currentSessionId, currentModel, ollamaHost, ollamaPort } = get()
+          const targetSessionId = sessionId || currentSessionId
+          
+          if (!targetSessionId) {
+            throw new Error('没有活动的聊天会话')
+          }
+          
+          if (!currentModel) {
+            throw new Error('未选择AI模型')
+          }
+          
+          // 添加用户消息
+          const userMessage: ChatMessage = {
+            id: `msg_${Date.now()}_user`,
+            role: 'user',
+            content,
+            timestamp: new Date()
+          }
+          
+          // 创建流式AI消息
+          const assistantMessageId = `msg_${Date.now()}_assistant`
+          const assistantMessage: ChatMessage = {
+              id: assistantMessageId,
+              role: 'assistant',
+              content: '',
+              timestamp: new Date(),
+              isStreaming: true
+            }
+          
+          set(state => {
+            const newState = {
+              chatSessions: state.chatSessions.map(session => 
+                session.id === targetSessionId
+                  ? { 
+                      ...session, 
+                      messages: [...session.messages, userMessage, assistantMessage], 
+                      updatedAt: new Date() 
+                    }
+                  : session
+              ),
+              isGenerating: true
+            }
+            updateComputedProperties()
+            return newState
+          })
+          
+          try {
+            // 获取会话历史
+            const session = get().chatSessions.find(s => s.id === targetSessionId)
+            const messages = session?.messages.slice(0, -1) || [] // 排除刚添加的空助手消息
+            
+            // 构建对话上下文
+            const prompt = messages.map(msg => 
+              `${msg.role === 'user' ? 'Human' : 'Assistant'}: ${msg.content}`
+            ).join('\n\n') + '\n\nAssistant: '
+            
+            const response = await fetch(`http://${ollamaHost}:${ollamaPort}/api/generate`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                model: currentModel.modelName,
+                prompt,
+                stream: true
+              })
+            })
+            
+            if (!response.ok) {
+              throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+            }
+            
+            const reader = response.body?.getReader()
+            const decoder = new TextDecoder()
+            let fullContent = ''
+            
+            if (reader) {
+              while (true) {
+                const { done, value } = await reader.read()
+                if (done) break
                 
-                if (data.done) {
-                  // 流式输出完成，最终处理
-                  const finalContent = displayContent || '抱歉，AI 没有返回有效响应。'
-                  get().updateMessage(sessionId, assistantMessageId, {
-                    content: finalContent,
-                    metadata: {
-                      query: content,
-                      executionTime: data.total_duration ? Math.round(data.total_duration / 1000000) : undefined,
-                      thinkContent: thinkContent || undefined,
-                      isStreaming: false,
-                    },
-                  })
-                  break
+                const chunk = decoder.decode(value)
+                const lines = chunk.split('\n').filter(line => line.trim())
+                
+                for (const line of lines) {
+                  try {
+                    const data = JSON.parse(line)
+                    if (data.response) {
+                      fullContent += data.response
+                      
+                      // 更新消息内容
+                      set(state => {
+                        const newState = {
+                          chatSessions: state.chatSessions.map(session => 
+                            session.id === targetSessionId
+                              ? {
+                                  ...session,
+                                  messages: session.messages.map(msg => 
+                                    msg.id === assistantMessageId
+                                      ? { ...msg, content: fullContent }
+                                      : msg
+                                  ),
+                                  updatedAt: new Date()
+                                }
+                              : session
+                          )
+                        }
+                        // 确保计算属性更新
+                        updateComputedProperties()
+                        return newState
+                      })
+                      
+                      // 调用更新回调
+                      onUpdate?.(fullContent)
+                    }
+                  } catch {
+                    // 忽略解析错误的行
+                  }
                 }
-              } catch (parseError) {
-                console.warn('解析流式响应失败:', parseError)
               }
             }
+            
+            // 完成流式传输
+            set(state => {
+              const newState = {
+                chatSessions: state.chatSessions.map(session => 
+                  session.id === targetSessionId
+                    ? {
+                        ...session,
+                        messages: session.messages.map(msg => 
+                          msg.id === assistantMessageId
+                            ? { ...msg, isStreaming: false }
+                            : msg
+                        ),
+                        updatedAt: new Date()
+                      }
+                    : session
+                ),
+                isGenerating: false
+              }
+              // 确保计算属性更新
+              updateComputedProperties()
+              return newState
+            })
+            
+          } catch (error) {
+            set({ isGenerating: false })
+            throw error
           }
+        },
 
-        } catch (error) {
-          console.error('AI 响应生成失败:', error)
-          
-          get().addMessage(sessionId, {
-            id: generateId(),
-            role: 'assistant',
-            content: '抱歉，生成响应时出现错误。请检查网络连接或稍后重试。',
-            metadata: {
-              error: error instanceof Error ? error.message : '未知错误',
-            },
+        clearSessions: () => {
+          set({ 
+            chatSessions: [], 
+            currentSessionId: null,
+            currentSession: null,
+            sessions: []
           })
-        } finally {
-          set({ isGenerating: false })
-        }
-      },
+        },
 
-      generateDSLQuery: async (naturalLanguage, _context) => {
-        set({ isGenerating: true })
+        clearMessages: (sessionId: string) => {
+          set(state => ({
+            chatSessions: state.chatSessions.map(session => 
+              session.id === sessionId
+                ? { ...session, messages: [], updatedAt: new Date() }
+                : session
+            )
+          }))
+          updateComputedProperties()
+        },
 
-        try {
-          // 这里应该实现实际的 DSL 生成逻辑
-          await new Promise(resolve => setTimeout(resolve, 1500))
+        // 新增AI功能实现
+        /**
+         * 智能查询构建器
+         * 根据自然语言和索引上下文生成精确的查询
+         */
+        buildSmartQuery: async (naturalLanguage, indexContext) => {
+          set({ isGenerating: true })
 
-          // 模拟生成的 DSL 查询
-          const dslQuery = `{
-  "query": {
-    "match": {
-      "message": "${naturalLanguage}"
-    }
-  }
+          try {
+            const { currentModel, ollamaHost, ollamaPort } = get()
+            
+            if (!currentModel) {
+              throw new Error('未选择AI模型')
+            }
+
+            const prompt = `你是一个Elasticsearch智能查询构建专家。请根据用户的自然语言描述和索引结构信息，生成最精确的Elasticsearch查询。
+
+用户描述: ${naturalLanguage}
+
+${indexContext ? `索引上下文信息:
+- 索引名称: ${indexContext.indexName || '未知'}
+- 字段映射: ${JSON.stringify(indexContext.mapping || {}, null, 2)}
+- 索引设置: ${JSON.stringify(indexContext.settings || {}, null, 2)}
+- 文档样例: ${JSON.stringify(indexContext.sampleDoc || {}, null, 2)}` : ''}
+
+请返回JSON格式的响应，包含:
+{
+  "query": "生成的DSL查询(JSON字符串)",
+  "explanation": "查询逻辑的详细解释",
+  "suggestions": ["优化建议1", "优化建议2"]
 }`
 
-          return dslQuery
+            const response = await fetch(`http://${ollamaHost}:${ollamaPort}/api/generate`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                model: currentModel.modelName,
+                prompt,
+                stream: false,
+                options: {
+                  temperature: 0.3,
+                  num_predict: 2048,
+                }
+              })
+            })
 
-        } catch (error) {
-          throw new Error('DSL 查询生成失败')
-        } finally {
-          set({ isGenerating: false })
-        }
-      },
+            if (!response.ok) {
+              throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+            }
 
-      analyzeData: async (_data, _question) => {
-        set({ isGenerating: true })
+            const data = await response.json()
+            
+            try {
+              const result = JSON.parse(data.response)
+              return {
+                query: result.query || '{}',
+                explanation: result.explanation || '查询生成完成',
+                suggestions: result.suggestions || []
+              }
+            } catch {
+              // 如果AI返回的不是JSON格式，尝试解析
+              return {
+                query: '{}',
+                explanation: data.response || '查询生成失败',
+                suggestions: ['请检查输入的自然语言描述']
+              }
+            }
 
-        try {
-          await new Promise(resolve => setTimeout(resolve, 2000))
-
-          return `基于提供的数据，针对问题 "${_question}" 的分析结果：\n\n这是一个模拟的数据分析响应。在实际实现中，AI 会分析数据并提供详细的洞察。`
-
-        } catch (error) {
-          throw new Error('数据分析失败')
-        } finally {
-          set({ isGenerating: false })
-        }
-      },
-
-      optimizeQuery: async (query) => {
-        set({ isGenerating: true })
-
-        try {
-          await new Promise(resolve => setTimeout(resolve, 1000))
-
-          return `// 优化后的查询\n${query}\n\n// 优化建议：\n// 1. 添加了适当的过滤条件\n// 2. 优化了排序逻辑\n// 3. 减少了不必要的字段`
-
-        } catch (error) {
-          throw new Error('查询优化失败')
-        } finally {
-          set({ isGenerating: false })
-        }
-      },
-
-      explainError: async (error, _context) => {
-        set({ isGenerating: true })
-
-        try {
-          await new Promise(resolve => setTimeout(resolve, 1000))
-
-          return `错误解释：\n\n错误信息：${error}\n\n可能的原因：\n1. 查询语法错误\n2. 索引不存在\n3. 权限不足\n\n建议的解决方案：\n1. 检查查询语法\n2. 验证索引名称\n3. 确认连接权限`
-
-        } catch (error) {
-          throw new Error('错误解释失败')
-        } finally {
-          set({ isGenerating: false })
-        }
-      },
-
-      // Ollama 连接
-      connectToOllama: async (host = 'localhost', port = 11434) => {
-        try {
-          // 先更新连接配置
-          set({
-            ollamaHost: host,
-            ollamaPort: port,
-            error: null,
-          })
-
-          // 测试连接
-          const response = await fetch(`http://${host}:${port}/api/tags`)
-          
-          if (!response.ok) {
-            throw new Error(`无法连接到 Ollama 服务器: HTTP ${response.status}`)
+          } catch (error) {
+            throw new Error('智能查询构建失败: ' + (error instanceof Error ? error.message : '未知错误'))
+          } finally {
+            set({ isGenerating: false })
           }
+        },
 
-          // 连接成功
-          set({
-            ollamaConnected: true,
-          })
+        /**
+         * 流式智能查询构建器
+         * 根据自然语言和索引上下文生成精确的查询，支持流式输出
+         */
+        buildSmartQueryStream: async (naturalLanguage, indexContext, onUpdate) => {
+          set({ isGenerating: true })
 
-          // 连接成功后获取可用模型
-          await get().fetchAvailableModels()
+          try {
+            const { currentModel, ollamaHost, ollamaPort } = get()
+            
+            if (!currentModel) {
+              throw new Error('未选择AI模型')
+            }
 
-        } catch (error) {
-          console.error('Ollama 连接失败:', error)
-          set({
-            ollamaConnected: false,
-            error: `Ollama 连接失败: ${error instanceof Error ? error.message : '未知错误'}`,
-          })
-          throw error
+            const prompt = `你是一个Elasticsearch智能查询构建专家。请根据用户的自然语言描述和索引结构信息，生成最精确的Elasticsearch查询。
+
+用户描述: ${naturalLanguage}
+
+${indexContext ? `索引上下文信息:
+- 索引名称: ${indexContext.indexName || '未知'}
+- 字段映射: ${JSON.stringify(indexContext.mapping || {}, null, 2)}
+- 索引设置: ${JSON.stringify(indexContext.settings || {}, null, 2)}
+- 文档样例: ${JSON.stringify(indexContext.sampleDoc || {}, null, 2)}` : ''}
+
+请返回JSON格式的响应，包含:
+{
+  "query": "生成的DSL查询(JSON字符串)",
+  "explanation": "查询逻辑的详细解释",
+  "suggestions": ["优化建议1", "优化建议2"]
+}`
+
+            const response = await fetch(`http://${ollamaHost}:${ollamaPort}/api/generate`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                model: currentModel.modelName,
+                prompt,
+                stream: true,
+                options: {
+                  temperature: 0.3,
+                  num_predict: 2048,
+                }
+              })
+            })
+
+            if (!response.ok) {
+              throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+            }
+
+            const reader = response.body?.getReader()
+            const decoder = new TextDecoder()
+            let fullResponse = ''
+
+            if (reader) {
+              while (true) {
+                const { done, value } = await reader.read()
+                if (done) break
+
+                const chunk = decoder.decode(value)
+                const lines = chunk.split('\n').filter(line => line.trim())
+                
+                for (const line of lines) {
+                  try {
+                    const data = JSON.parse(line)
+                    if (data.response) {
+                      fullResponse += data.response
+                      
+                      // 为流式输出提供更好的显示内容
+                      let displayContent = '🤖 AI正在分析您的查询需求...\n\n'
+                      
+                      // 尝试检测是否开始生成JSON
+                      if (fullResponse.includes('{')) {
+                        displayContent += '📝 正在构建Elasticsearch查询...\n\n'
+                        
+                        // 如果包含query字段，显示正在生成查询
+                        if (fullResponse.includes('"query"')) {
+                          displayContent += '🔍 正在生成查询结构...\n\n'
+                        }
+                        
+                        // 如果包含explanation字段，显示正在生成说明
+                        if (fullResponse.includes('"explanation"')) {
+                          displayContent += '📖 正在生成查询说明...\n\n'
+                        }
+                        
+                        // 如果包含suggestions字段，显示正在生成建议
+                        if (fullResponse.includes('"suggestions"')) {
+                          displayContent += '💡 正在生成优化建议...\n\n'
+                        }
+                      }
+                      
+                      displayContent += `原始响应长度: ${fullResponse.length} 字符`
+                      
+                      // 添加调试信息
+                      console.log('流式更新:', displayContent.substring(0, 100) + '...')
+                      onUpdate?.(displayContent)
+                    }
+                  } catch {
+                    // 忽略解析错误的行
+                  }
+                }
+              }
+            }
+
+            try {
+              const result = JSON.parse(fullResponse)
+              return {
+                query: result.query || '{}',
+                explanation: result.explanation || '查询生成完成',
+                suggestions: result.suggestions || []
+              }
+            } catch {
+              // 如果AI返回的不是JSON格式，尝试解析
+              return {
+                query: '{}',
+                explanation: fullResponse || '查询生成失败',
+                suggestions: ['请检查输入的自然语言描述']
+              }
+            }
+
+          } catch (error) {
+            throw new Error('智能查询构建失败: ' + (error instanceof Error ? error.message : '未知错误'))
+          } finally {
+            set({ isGenerating: false })
+          }
+        },
+
+        /**
+         * 查询性能分析
+         * 分析查询执行结果，提供性能优化建议
+         */
+        analyzeQueryPerformance: async (queryBody, queryResults) => {
+          set({ isGenerating: true })
+
+          try {
+            const { currentModel, ollamaHost, ollamaPort } = get()
+            
+            if (!currentModel) {
+              throw new Error('未选择AI模型')
+            }
+
+            const prompt = `你是一个Elasticsearch性能优化专家。请分析以下查询和执行结果，提供详细的性能优化建议。
+
+查询内容:
+${JSON.stringify(queryBody, null, 2)}
+
+执行结果:
+- 总命中数: ${queryResults.hits?.total?.value || 0}
+- 执行时间: ${queryResults.took || 0}ms
+- 分片信息: ${JSON.stringify(queryResults._shards || {}, null, 2)}
+
+请返回JSON格式的响应，包含:
+{
+  "optimizations": ["优化建议1", "优化建议2"],
+  "indexSuggestions": ["索引建议1", "索引建议2"],
+  "report": "详细的性能分析报告"
+}`
+
+            const response = await fetch(`http://${ollamaHost}:${ollamaPort}/api/generate`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                model: currentModel.modelName,
+                prompt,
+                stream: false,
+                options: {
+                  temperature: 0.3,
+                  num_predict: 2048,
+                }
+              })
+            })
+
+            if (!response.ok) {
+              throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+            }
+
+            const data = await response.json()
+            
+            try {
+              const result = JSON.parse(data.response)
+              return {
+                optimizations: result.optimizations || [],
+                indexSuggestions: result.indexSuggestions || [],
+                report: result.report || '性能分析完成'
+              }
+            } catch {
+              return {
+                optimizations: ['请检查查询结构'],
+                indexSuggestions: ['考虑添加相关索引'],
+                report: data.response || '性能分析失败'
+              }
+            }
+
+          } catch (error) {
+            throw new Error('性能分析失败: ' + (error instanceof Error ? error.message : '未知错误'))
+          } finally {
+            set({ isGenerating: false })
+          }
+        },
+
+        /**
+         * 查询错误诊断
+         * 提供详细的错误诊断和解决方案
+         */
+        diagnoseError: async (error, queryContext) => {
+          set({ isGenerating: true })
+
+          try {
+            const { currentModel, ollamaHost, ollamaPort } = get()
+            
+            if (!currentModel) {
+              throw new Error('未选择AI模型')
+            }
+
+            const prompt = `你是一个Elasticsearch错误诊断专家。请分析以下错误信息和查询上下文，提供详细的诊断和解决方案。
+
+错误信息:
+${JSON.stringify(error, null, 2)}
+
+查询上下文:
+${JSON.stringify(queryContext || {}, null, 2)}
+
+请返回JSON格式的响应，包含:
+{
+  "diagnosis": "错误原因分析",
+  "solutions": ["解决方案1", "解决方案2"],
+  "prevention": ["预防措施1", "预防措施2"]
+}`
+
+            const response = await fetch(`http://${ollamaHost}:${ollamaPort}/api/generate`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                model: currentModel.modelName,
+                prompt,
+                stream: false,
+                options: {
+                  temperature: 0.3,
+                  num_predict: 2048,
+                }
+              })
+            })
+
+            if (!response.ok) {
+              throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+            }
+
+            const data = await response.json()
+            
+            try {
+              const result = JSON.parse(data.response)
+              return {
+                diagnosis: result.diagnosis || '错误诊断完成',
+                solutions: result.solutions || [],
+                prevention: result.prevention || []
+              }
+            } catch {
+              return {
+                diagnosis: data.response || '错误诊断失败',
+                solutions: ['请检查查询语法'],
+                prevention: ['遵循最佳实践']
+              }
+            }
+
+          } catch (error) {
+            throw new Error('错误诊断失败: ' + (error instanceof Error ? error.message : '未知错误'))
+          } finally {
+            set({ isGenerating: false })
+          }
+        },
+
+        /**
+         * 最佳实践建议
+         * 根据查询类型和数据特征提供最佳实践建议
+         */
+        getBestPractices: async (queryType, dataCharacteristics) => {
+          set({ isGenerating: true })
+
+          try {
+            const { currentModel, ollamaHost, ollamaPort } = get()
+            
+            if (!currentModel) {
+              throw new Error('未选择AI模型')
+            }
+
+            const prompt = `你是一个Elasticsearch最佳实践专家。请根据查询类型和数据特征，提供相应的最佳实践建议。
+
+查询类型: ${queryType}
+数据特征: ${JSON.stringify(dataCharacteristics || {}, null, 2)}
+
+请返回JSON格式的响应，包含:
+{
+  "practices": ["最佳实践1", "最佳实践2"],
+  "examples": ["示例1", "示例2"],
+  "warnings": ["注意事项1", "注意事项2"]
+}`
+
+            const response = await fetch(`http://${ollamaHost}:${ollamaPort}/api/generate`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                model: currentModel.modelName,
+                prompt,
+                stream: false,
+                options: {
+                  temperature: 0.3,
+                  num_predict: 2048,
+                }
+              })
+            })
+
+            if (!response.ok) {
+              throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+            }
+
+            const data = await response.json()
+            
+            try {
+              const result = JSON.parse(data.response)
+              return {
+                practices: result.practices || [],
+                examples: result.examples || [],
+                warnings: result.warnings || []
+              }
+            } catch {
+              return {
+                practices: ['遵循Elasticsearch官方文档'],
+                examples: ['参考官方示例'],
+                warnings: [data.response || '最佳实践建议生成失败']
+              }
+            }
+
+          } catch (error) {
+            throw new Error('最佳实践建议生成失败: ' + (error instanceof Error ? error.message : '未知错误'))
+          } finally {
+            set({ isGenerating: false })
+          }
         }
-      },
-
-      disconnectFromOllama: () => {
-        set({
-          ollamaConnected: false,
-          currentModel: null,
-          availableModels: defaultModels,
-        })
-      },
-
-      testOllamaConnection: async () => {
-        try {
-          const { ollamaHost, ollamaPort } = get()
-          const response = await fetch(`http://${ollamaHost}:${ollamaPort}/api/tags`, {
-            method: 'GET',
-            signal: AbortSignal.timeout(5000) // 5秒超时
-          })
-          
-          return response.ok
-        } catch (error) {
-          console.error('Ollama 连接测试失败:', error)
-          return false
-        }
-      },
-
-      // 功能设置
-      setCurrentFeature: (feature) => {
-        set({ currentFeature: feature })
-      },
-
-      // 错误处理
-      setError: (error) => {
-        set({ error })
-      },
-
-      clearError: () => {
-        set({ error: null })
-      },
-    }),
+      }
+    },
     {
-      name: 'magic-cube-ai-store',
-      // 持久化会话、模型配置、连接状态和 Ollama 设置
+      name: 'ai-store',
+      // 只持久化聊天会话相关数据
       partialize: (state) => ({
-        sessions: state.sessions,
-        currentSession: state.currentSession,
-        currentModel: state.currentModel,
-        ollamaConnected: state.ollamaConnected,
+        chatSessions: state.chatSessions,
+        currentSessionId: state.currentSessionId,
         ollamaHost: state.ollamaHost,
         ollamaPort: state.ollamaPort,
-      }),
+        currentModel: state.currentModel
+      })
     }
-  )
-)
+  ),
+  {
+    name: 'ai-store-devtools'
+  }
+))
+
+export type { AIModel, ChatMessage, ChatSession, AIState, AIActions }

@@ -6,7 +6,6 @@ import {
   Wifi, 
   WifiOff,
   Settings,
-  Bell,
   User,
   RefreshCw
 } from 'lucide-react'
@@ -284,12 +283,6 @@ export function Header() {
             disabled={!esConnected}
           >
             <RefreshCw className="h-4 w-4" />
-          </Button>
-
-          {/* 通知按钮 */}
-          <Button variant="ghost" size="icon" className="h-9 w-9 relative">
-            <Bell className="h-4 w-4" />
-            {/* 可以在这里添加通知数量的小红点 */}
           </Button>
 
           {/* 主题切换 */}

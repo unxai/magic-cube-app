@@ -2,9 +2,8 @@ import { useState, useEffect, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { Send, Bot, User, Trash2, Download, Copy, ChevronDown, ChevronRight, ArrowUp, ArrowDown } from 'lucide-react'
+import { Send, Bot, User, Trash2, Download, Copy, ChevronDown, ArrowUp, ArrowDown } from 'lucide-react'
 import { useAIStore } from '@/stores/ai-store'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
@@ -29,53 +28,30 @@ interface Message {
  * Think内容折叠组件
  */
 function ThinkSection({ thinkContent }: { thinkContent: string }) {
-  const [isExpanded, setIsExpanded] = useState(false)
-
   return (
-    <div className="w-full">
-      <Button
-        variant="ghost"
-        size="sm"
-        className="h-auto p-2 w-full justify-start bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-md"
-        onClick={() => setIsExpanded(!isExpanded)}
-      >
-        <div className="flex items-center space-x-2 text-amber-700">
-          {isExpanded ? (
-            <ChevronDown className="h-4 w-4" />
+    <ReactMarkdown
+      components={{
+        code({ node, className, children, ...props }) {
+          const match = /language-(\w+)/.exec(className || '')
+          return match ? (
+            <SyntaxHighlighter
+              style={tomorrow}
+              language={match[1]}
+              PreTag="div"
+              className="text-xs"
+            >
+              {String(children).replace(/\n$/, '')}
+            </SyntaxHighlighter>
           ) : (
-            <ChevronRight className="h-4 w-4" />
-          )}
-          <span className="text-sm font-medium">💭 AI 思考过程</span>
-        </div>
-      </Button>
-      {isExpanded && (
-        <div className="mt-2 p-3 bg-amber-50 border border-amber-200 rounded-md">
-          <ReactMarkdown
-            components={{
-              code({ node, className, children, ...props }) {
-                const match = /language-(\w+)/.exec(className || '')
-                return match ? (
-                  <SyntaxHighlighter
-                    style={tomorrow}
-                    language={match[1]}
-                    PreTag="div"
-                    className="text-xs"
-                  >
-                    {String(children).replace(/\n$/, '')}
-                  </SyntaxHighlighter>
-                ) : (
-                  <code className={className} {...props}>
-                    {children}
-                  </code>
-                )
-              }
-            }}
-          >
-            {thinkContent}
-          </ReactMarkdown>
-        </div>
-      )}
-    </div>
+            <code className={className} {...props}>
+              {children}
+            </code>
+          )
+        }
+      }}
+    >
+      {thinkContent}
+    </ReactMarkdown>
   )
 }
 
@@ -126,7 +102,7 @@ export function AIChat() {
   const inputRef = useRef<HTMLInputElement>(null)
 
   const {
-    sendMessage,
+    streamMessage,
     ollamaConnected,
     availableModels,
     currentModel,
@@ -146,7 +122,7 @@ export function AIChat() {
       // 如果有历史会话，恢复最近的会话
       if (sessions.length > 0) {
         const latestSession = sessions[0] // sessions 按创建时间倒序排列
-        setCurrentSession(latestSession)
+        setCurrentSession(latestSession.id)
       } else {
         // 如果没有历史会话，创建新会话
         createSession('AI 助手对话')
@@ -161,11 +137,20 @@ export function AIChat() {
         id: msg.id,
         role: msg.role as 'user' | 'assistant',
         content: msg.content,
-        timestamp: new Date(msg.timestamp)
+        timestamp: new Date(msg.timestamp),
+        metadata: {
+          thinkContent: msg.thinkContent,
+          isStreaming: msg.isStreaming,
+          executionTime: msg.executionTime
+        }
       }))
       setMessages(convertedMessages)
+      // 如果正在生成回复，自动滚动到底部
+      if (isGenerating) {
+        scrollToBottom()
+      }
     }
-  }, [currentSession?.messages])
+  }, [currentSession?.messages, currentSession?.updatedAt, isGenerating])
 
   // 当连接到Ollama时获取可用模型
   useEffect(() => {
@@ -243,11 +228,15 @@ export function AIChat() {
     setIsLoading(true)
 
     try {
-      // sendMessage 会自动添加用户消息和AI回复到 store
-      await sendMessage(messageContent)
+      // 使用 streamMessage 实现流式输出
+      await streamMessage(messageContent, currentSession?.id, (_content) => scrollToBottom())
     } catch (error) {
       console.error('Failed to send message:', error)
-      // 错误处理已经在 store 中实现
+      toast({
+        title: '发送失败',
+        description: error instanceof Error ? error.message : '未知错误',
+        variant: 'destructive'
+      })
     } finally {
       setIsLoading(false)
       inputRef.current?.focus()
@@ -322,9 +311,7 @@ export function AIChat() {
             </p>
           </div>
           <div className="flex items-center space-x-2">
-            <Badge variant={ollamaConnected ? 'default' : 'destructive'}>
-              {ollamaConnected ? '已连接' : '未连接'}
-            </Badge>
+            
 
             {/* 模型选择器 */}
             {ollamaConnected && availableModels.length > 0 && (
@@ -415,7 +402,29 @@ export function AIChat() {
                           }`}>
                           {/* Think 内容区域 */}
                           {msg.role === 'assistant' && msg.metadata?.thinkContent && (
-                            <ThinkSection thinkContent={msg.metadata.thinkContent} />
+                            <div className="group relative">
+                            <div className="flex items-center gap-2 mb-2">
+                              <div className="h-px flex-1 bg-muted-foreground/20" />
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground"
+                                onClick={() => {
+                                  const thinkEl = document.getElementById(`think-${msg.id}`);
+                                  if (thinkEl) {
+                                    thinkEl.classList.toggle('hidden');
+                                  }
+                                }}
+                              >
+                                <ChevronDown className="h-3 w-3 mr-1" />
+                                思考过程
+                              </Button>
+                              <div className="h-px flex-1 bg-muted-foreground/20" />
+                            </div>
+                            <div id={`think-${msg.id}`} className="rounded-lg bg-secondary/50 p-3 text-sm text-muted-foreground">
+                              <ThinkSection thinkContent={msg.metadata.thinkContent} />
+                            </div>
+                          </div>
                           )}
 
                           {/* 主要回答内容 */}
@@ -429,16 +438,12 @@ export function AIChat() {
                               </p>
                             ) : (
                               <div className="prose prose-sm max-w-none dark:prose-invert">
-                                <MarkdownMessage content={msg.content} />
+                                <div className="relative">
+                                  <MarkdownMessage content={msg.content} />
+                                </div>
                               </div>
                             )}
-                            {msg.role === 'assistant' && msg.metadata?.isStreaming && (
-                              <div className="flex space-x-1 mt-3">
-                                <div className="w-2 h-2 bg-current rounded-full animate-bounce opacity-60" />
-                                <div className="w-2 h-2 bg-current rounded-full animate-bounce opacity-60" style={{ animationDelay: '0.1s' }} />
-                                <div className="w-2 h-2 bg-current rounded-full animate-bounce opacity-60" style={{ animationDelay: '0.2s' }} />
-                              </div>
-                            )}
+
                           </div>
                         </div>
 
