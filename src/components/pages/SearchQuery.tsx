@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels'
-import { Search, Play, Save, History, Edit, Trash2, MoreHorizontal, Copy, Download, Filter, RefreshCw, ChevronUp, ChevronDown, ChevronsUpDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Bot } from 'lucide-react'
+import { Play, Save, History, Edit, Trash2, MoreHorizontal, Copy, Download, Filter, RefreshCw, ChevronUp, ChevronDown, ChevronsUpDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Bot } from 'lucide-react'
 import { useElasticsearchStore } from '@/stores/elasticsearch-store'
 import { useToast } from '@/hooks/use-toast'
 import { AIAssistant } from '@/components/AIAssistant'
@@ -297,19 +297,20 @@ export function SearchQuery() {
         effectivePagination = pagination
       }
 
-      // 应用分页参数到查询
-      parsedQuery.from = (effectivePagination.currentPage - 1) * effectivePagination.pageSize
-      parsedQuery.size = effectivePagination.pageSize
+      // 应用分页参数到查询（仅在用户未指定时）
+      if (parsedQuery.from === undefined) {
+        parsedQuery.from = (effectivePagination.currentPage - 1) * effectivePagination.pageSize
+      }
+      if (parsedQuery.size === undefined) {
+        parsedQuery.size = effectivePagination.pageSize
+      }
 
-      // 应用排序配置
-      if (sortConfig) {
+      // 应用排序配置（仅在用户未指定时）
+      if (sortConfig && !parsedQuery.sort) {
         parsedQuery.sort = [{ [sortConfig.field]: { order: sortConfig.direction } }]
       }
 
       console.log('最终查询体:', JSON.stringify(parsedQuery, null, 2))
-
-      // 更新查询体显示
-      setQueryBody(JSON.stringify(parsedQuery, null, 2))
 
       // 执行查询
       const result = await executeQuery(selectedIndex, parsedQuery)

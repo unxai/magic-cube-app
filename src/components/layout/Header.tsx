@@ -19,6 +19,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Badge } from '@/components/ui/badge'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Label } from '@/components/ui/label'
 import { useTheme } from '@/components/theme-provider'
 import { useAppStore } from '@/stores/app-store'
 import { useElasticsearchStore } from '@/stores/elasticsearch-store'
@@ -41,7 +43,23 @@ export function Header() {
     fetchIndices,
     connect
   } = useElasticsearchStore()
-  const { ollamaConnected, currentModel } = useAIStore()
+  const { 
+    ollamaConnected, 
+    currentModel, 
+    availableModels,
+    setCurrentModel,
+    fetchAvailableModels,
+    isModelLoading
+  } = useAIStore()
+
+  /**
+   * 初始化AI模型
+   */
+  React.useEffect(() => {
+    if (ollamaConnected && availableModels.length === 0) {
+      fetchAvailableModels()
+    }
+  }, [ollamaConnected, fetchAvailableModels, availableModels.length])
 
   /**
    * 获取集群列表
@@ -249,30 +267,46 @@ export function Header() {
 
         {/* 右侧：状态指示器和操作按钮 */}
         <div className="flex items-center space-x-3">
-          {/* Elasticsearch 连接状态 */}
-          <div className="flex items-center space-x-2">
-            {esConnected ? (
-              <Wifi className="h-4 w-4 text-green-600" />
-            ) : (
-              <WifiOff className="h-4 w-4 text-red-600" />
-            )}
-            <Badge 
-              variant={esConnected ? "default" : "destructive"}
-              className="text-xs"
-            >
-              ES {esConnected ? '已连接' : '未连接'}
-            </Badge>
-          </div>
-
-          {/* AI 模型状态 */}
-          <div className="flex items-center space-x-2">
-            <Badge 
-              variant={ollamaConnected ? "default" : "secondary"}
-              className="text-xs"
-            >
-              AI {ollamaConnected ? (currentModel?.name || 'Ollama') : '未连接'}
-            </Badge>
-          </div>
+          {/* AI 模型选择器 */}
+          {ollamaConnected && availableModels.length > 0 ? (
+            <div className="flex items-center space-x-2">
+              <Label htmlFor="global-model-select" className="text-sm text-muted-foreground whitespace-nowrap">
+                AI模型:
+              </Label>
+              <Select
+                value={currentModel?.id || ''}
+                onValueChange={(value) => {
+                  const model = availableModels.find(m => m.id === value)
+                  if (model) {
+                    setCurrentModel(model)
+                  }
+                }}
+                disabled={isModelLoading}
+              >
+                <SelectTrigger className="w-40">
+                  <SelectValue placeholder={isModelLoading ? "加载中..." : "选择模型"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableModels
+                    .filter(model => model.isAvailable)
+                    .map((model) => (
+                      <SelectItem key={model.id} value={model.id}>
+                        {model.name}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
+          ) : (
+            <div className="flex items-center space-x-2">
+              <Badge 
+                variant={ollamaConnected ? "default" : "secondary"}
+                className="text-xs"
+              >
+                AI {ollamaConnected ? '已连接' : '未连接'}
+              </Badge>
+            </div>
+          )}
 
           {/* 刷新按钮 */}
           <Button

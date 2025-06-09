@@ -5,8 +5,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Send, Bot, User, Trash2, Download, Copy, ChevronDown, ArrowUp, ArrowDown } from 'lucide-react'
 import { useAIStore } from '@/stores/ai-store'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Label } from '@/components/ui/label'
+
 import ReactMarkdown from 'react-markdown'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { tomorrow } from 'react-syntax-highlighter/dist/esm/styles/prism'
@@ -104,11 +103,6 @@ export function AIChat() {
   const {
     streamMessage,
     ollamaConnected,
-    availableModels,
-    currentModel,
-    setCurrentModel,
-    fetchAvailableModels,
-    isModelLoading,
     currentSession,
     createSession,
     sessions,
@@ -152,12 +146,10 @@ export function AIChat() {
     }
   }, [currentSession?.messages, currentSession?.updatedAt, isGenerating])
 
-  // 当连接到Ollama时获取可用模型
+  // AI连接状态检查
   useEffect(() => {
-    if (ollamaConnected) {
-      fetchAvailableModels()
-    }
-  }, [ollamaConnected, fetchAvailableModels])
+    // 这里可以添加其他初始化逻辑
+  }, [ollamaConnected])
 
   // 保存对话历史到本地存储（可选，因为store已经持久化）
   useEffect(() => {
@@ -312,38 +304,6 @@ export function AIChat() {
           </div>
           <div className="flex items-center space-x-2">
             
-
-            {/* 模型选择器 */}
-            {ollamaConnected && availableModels.length > 0 && (
-              <div className="flex items-center space-x-2">
-                <Label htmlFor="model-select" className="text-sm text-muted-foreground">
-                  模型:
-                </Label>
-                <Select
-                  value={currentModel?.id || ''}
-                  onValueChange={(value) => {
-                    const model = availableModels.find(m => m.id === value)
-                    if (model) {
-                      setCurrentModel(model)
-                    }
-                  }}
-                  disabled={isModelLoading}
-                >
-                  <SelectTrigger className="w-40">
-                    <SelectValue placeholder={isModelLoading ? "加载中..." : "选择模型"} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {availableModels
-                      .filter(model => model.isAvailable)
-                      .map((model) => (
-                        <SelectItem key={model.id} value={model.id}>
-                          {model.name}
-                        </SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
 
             {messages.length > 0 && (
               <>

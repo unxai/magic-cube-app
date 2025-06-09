@@ -702,34 +702,8 @@ ${indexContext ? `索引上下文信息:
                     if (data.response) {
                       fullResponse += data.response
                       
-                      // 为流式输出提供更好的显示内容
-                      let displayContent = '🤖 AI正在分析您的查询需求...\n\n'
-                      
-                      // 尝试检测是否开始生成JSON
-                      if (fullResponse.includes('{')) {
-                        displayContent += '📝 正在构建Elasticsearch查询...\n\n'
-                        
-                        // 如果包含query字段，显示正在生成查询
-                        if (fullResponse.includes('"query"')) {
-                          displayContent += '🔍 正在生成查询结构...\n\n'
-                        }
-                        
-                        // 如果包含explanation字段，显示正在生成说明
-                        if (fullResponse.includes('"explanation"')) {
-                          displayContent += '📖 正在生成查询说明...\n\n'
-                        }
-                        
-                        // 如果包含suggestions字段，显示正在生成建议
-                        if (fullResponse.includes('"suggestions"')) {
-                          displayContent += '💡 正在生成优化建议...\n\n'
-                        }
-                      }
-                      
-                      displayContent += `原始响应长度: ${fullResponse.length} 字符`
-                      
-                      // 添加调试信息
-                      console.log('流式更新:', displayContent.substring(0, 100) + '...')
-                      onUpdate?.(displayContent)
+                      // 直接传递AI生成的内容，不添加额外的调试信息
+                      onUpdate?.(fullResponse)
                     }
                   } catch {
                     // 忽略解析错误的行

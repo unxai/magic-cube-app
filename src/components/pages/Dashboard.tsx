@@ -242,8 +242,8 @@ export function Dashboard() {
                     <span className="text-sm font-medium">{currentModel.name}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-sm text-muted-foreground">提供商</span>
-                    <span className="text-sm font-medium">{currentModel.provider}</span>
+                    <span className="text-sm text-muted-foreground">模型ID</span>
+                    <span className="text-sm font-medium">{currentModel.id}</span>
                   </div>
                 </>
               )}
