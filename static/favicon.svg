@@ -1,12 +1,11 @@
-<?xml version="1.0" encoding="UTF-8"?>
 <svg width="32" height="32" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
   <defs>
     <!-- 背景渐变 - 深色科技感 -->
-    <radialGradient id="bg" cx="50%" cy="50%" r="70%">
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" style="stop-color:#1a1a2e" />
       <stop offset="50%" style="stop-color:#16213e" />
       <stop offset="100%" style="stop-color:#0f0f23" />
-    </radialGradient>
+    </linearGradient>
     
     <!-- 魔方顶面渐变 - 霓虹蓝 -->
     <linearGradient id="cube1" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -45,70 +44,78 @@
     </filter>
   </defs>
   
-  <!-- 背景圆形 -->
-  <circle cx="512" cy="512" r="480" fill="url(#bg)"/>
+  <!-- 方形背景 -->
+  <rect x="0" y="0" width="1024" height="1024" rx="120" ry="120" fill="url(#bg)"/>
   
-  <!-- 外层发光环 -->
-  <circle cx="512" cy="512" r="350" fill="none" stroke="#00d4ff" stroke-width="2" opacity="0.3" filter="url(#glow)"/>
-  <circle cx="512" cy="512" r="320" fill="none" stroke="#8a2be2" stroke-width="1" opacity="0.2" filter="url(#glow)"/>
+  <!-- 装饰性边框 -->
+  <rect x="40" y="40" width="944" height="944" rx="80" ry="80" fill="none" stroke="#00d4ff" stroke-width="2" opacity="0.3" filter="url(#glow)"/>
+  <rect x="80" y="80" width="864" height="864" rx="60" ry="60" fill="none" stroke="#8a2be2" stroke-width="1" opacity="0.2" filter="url(#glow)"/>
   
-  <!-- 魔方主体 - 放大1.5倍 -->
+  <!-- 魔方主体 -->
   <g transform="translate(512,512)">
-    <!-- 魔方顶面 - 放大 -->
-    <path d="M -180,-120 L 0,-240 L 180,-120 L 0,0 Z" fill="url(#cube1)" stroke="#00d4ff" stroke-width="3" filter="url(#glow)"/>
+    <!-- 魔方顶面 -->
+    <path d="M -150,-100 L 0,-200 L 150,-100 L 0,0 Z" fill="url(#cube1)" stroke="#00d4ff" stroke-width="3" filter="url(#glow)"/>
     
-    <!-- 魔方左面 - 放大 -->
-    <path d="M -180,-120 L 0,0 L 0,240 L -180,120 Z" fill="url(#cube3)" stroke="#00ffcc" stroke-width="3" filter="url(#glow)"/>
+    <!-- 魔方左面 -->
+    <path d="M -150,-100 L 0,0 L 0,200 L -150,100 Z" fill="url(#cube3)" stroke="#00ffcc" stroke-width="3" filter="url(#glow)"/>
     
-    <!-- 魔方右面 - 放大 -->
-    <path d="M 0,0 L 180,-120 L 180,120 L 0,240 Z" fill="url(#cube2)" stroke="#8a2be2" stroke-width="3" filter="url(#glow)"/>
+    <!-- 魔方右面 -->
+    <path d="M 0,0 L 150,-100 L 150,100 L 0,200 Z" fill="url(#cube2)" stroke="#8a2be2" stroke-width="3" filter="url(#glow)"/>
     
     <!-- 魔方网格线 - 科技感 -->
     <g stroke="#00d4ff" stroke-width="2" opacity="0.8" filter="url(#innerGlow)">
-      <!-- 顶面网格 - 放大 -->
-      <line x1="-60" y1="-160" x2="60" y2="-80"/>
-      <line x1="-120" y1="-200" x2="120" y2="-40"/>
-      <line x1="-60" y1="-80" x2="0" y2="-120"/>
-      <line x1="60" y1="-80" x2="0" y2="-120"/>
+      <!-- 顶面网格 -->
+      <line x1="-50" y1="-133" x2="50" y2="-67"/>
+      <line x1="-100" y1="-167" x2="100" y2="-33"/>
+      <line x1="-50" y1="-67" x2="0" y2="-100"/>
+      <line x1="50" y1="-67" x2="0" y2="-100"/>
       
-      <!-- 左面网格 - 放大 -->
-      <line x1="-120" y1="-40" x2="-120" y2="40"/>
-      <line x1="-60" y1="-80" x2="-60" y2="80"/>
-      <line x1="-120" y1="40" x2="-60" y2="160"/>
-      <line x1="-60" y1="80" x2="0" y2="120"/>
+      <!-- 左面网格 -->
+      <line x1="-100" y1="-33" x2="-100" y2="33"/>
+      <line x1="-50" y1="-67" x2="-50" y2="67"/>
+      <line x1="-100" y1="33" x2="-50" y2="133"/>
+      <line x1="-50" y1="67" x2="0" y2="100"/>
       
-      <!-- 右面网格 - 放大 -->
-      <line x1="120" y1="-40" x2="120" y2="40"/>
-      <line x1="60" y1="-80" x2="60" y2="80"/>
-      <line x1="120" y1="40" x2="60" y2="160"/>
-      <line x1="60" y1="80" x2="0" y2="120"/>
+      <!-- 右面网格 -->
+      <line x1="100" y1="-33" x2="100" y2="33"/>
+      <line x1="50" y1="-67" x2="50" y2="67"/>
+      <line x1="100" y1="33" x2="50" y2="133"/>
+      <line x1="50" y1="67" x2="0" y2="100"/>
     </g>
     
     <!-- 中心核心 - 科技感 -->
-    <circle cx="0" cy="0" r="20" fill="#00d4ff" opacity="0.9" filter="url(#glow)"/>
-    <circle cx="0" cy="0" r="12" fill="#ffffff" opacity="0.8"/>
-    <circle cx="0" cy="0" r="6" fill="#00d4ff" opacity="1"/>
+    <circle cx="0" cy="0" r="18" fill="#00d4ff" opacity="0.9" filter="url(#glow)"/>
+    <circle cx="0" cy="0" r="11" fill="#ffffff" opacity="0.8"/>
+    <circle cx="0" cy="0" r="5" fill="#00d4ff" opacity="1"/>
     
     <!-- 科技装饰元素 -->
     <g fill="#00d4ff" opacity="0.7" filter="url(#glow)">
       <!-- 电路节点 -->
-      <circle cx="-240" cy="-180" r="8"/>
-      <circle cx="240" cy="-60" r="6"/>
-      <circle cx="-220" cy="180" r="10"/>
-      <circle cx="220" cy="200" r="7"/>
+      <circle cx="-200" cy="-150" r="6"/>
+      <circle cx="200" cy="-50" r="5"/>
+      <circle cx="-180" cy="150" r="8"/>
+      <circle cx="180" cy="170" r="6"/>
       
       <!-- 电路连线 -->
-      <line x1="-240" y1="-180" x2="-200" y2="-160" stroke="#00d4ff" stroke-width="2" opacity="0.5"/>
-      <line x1="240" y1="-60" x2="200" y2="-80" stroke="#8a2be2" stroke-width="2" opacity="0.5"/>
-      <line x1="-220" y1="180" x2="-180" y2="160" stroke="#00ffcc" stroke-width="2" opacity="0.5"/>
+      <line x1="-200" y1="-150" x2="-170" y2="-130" stroke="#00d4ff" stroke-width="2" opacity="0.5"/>
+      <line x1="200" y1="-50" x2="170" y2="-70" stroke="#8a2be2" stroke-width="2" opacity="0.5"/>
+      <line x1="-180" y1="150" x2="-150" y2="130" stroke="#00ffcc" stroke-width="2" opacity="0.5"/>
       
       <!-- 数据流动效果 -->
-      <rect x="-260" y="-90" width="12" height="4" rx="2" fill="#00ffcc" opacity="0.8">
-        <animateTransform attributeName="transform" type="translate" values="0,0; 20,0; 0,0" dur="2s" repeatCount="indefinite"/>
+      <rect x="-220" y="-75" width="10" height="3" rx="1" fill="#00ffcc" opacity="0.8">
+        <animateTransform attributeName="transform" type="translate" values="0,0; 15,0; 0,0" dur="2s" repeatCount="indefinite"/>
       </rect>
-      <rect x="200" y="90" width="8" height="3" rx="1" fill="#8a2be2" opacity="0.8">
-        <animateTransform attributeName="transform" type="translate" values="0,0; -15,0; 0,0" dur="1.5s" repeatCount="indefinite"/>
+      <rect x="170" y="75" width="8" height="3" rx="1" fill="#8a2be2" opacity="0.8">
+        <animateTransform attributeName="transform" type="translate" values="0,0; -12,0; 0,0" dur="1.5s" repeatCount="indefinite"/>
       </rect>
     </g>
+  </g>
+  
+  <!-- 四角装饰 -->
+  <g fill="#00d4ff" opacity="0.4">
+    <circle cx="150" cy="150" r="4"/>
+    <circle cx="874" cy="150" r="4"/>
+    <circle cx="150" cy="874" r="4"/>
+    <circle cx="874" cy="874" r="4"/>
   </g>
 </svg>

@@ -1,5 +1,9 @@
 # Magic Cube App
 
+<div align="center">
+  <img src="static/logo.svg" alt="Magic Cube App Logo" width="120" height="120">
+</div>
+
 🎯 **基于本地 Ollama AI 的 Elasticsearch 智能助手**
 
 通过自然语言对话操作 Elasticsearch，自动生成 DSL 查询，让数据操作更简单。
@@ -11,6 +15,12 @@
 - 📈 查询结果可视化
 - 🛡️ 本地 AI，保护数据隐私
 - 💻 跨平台桌面应用
+
+## 📸 应用截图
+
+<div align="center">
+  <img src="screenshots/dashboard.png" alt="应用主界面" width="800">
+</div>
 
 ## 🚀 快速开始
 
