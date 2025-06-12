@@ -567,9 +567,6 @@ export function AIChat() {
                             ) : (
                               <div className="prose prose-sm max-w-none dark:prose-invert">
                                 <div className="relative">
-                                  <div className="absolute top-0 right-0 p-1 opacity-30">
-                                    <Bot className="h-4 w-4" />
-                                  </div>
                                   <MarkdownMessage content={msg.content} />
                                 </div>
                               </div>
@@ -579,7 +576,7 @@ export function AIChat() {
                           
                           {/* 加载状态 - 放在文字下方 */}
                           {(isLoading || isGenerating) && msg.role === 'assistant' && index === messages.length - 1 && (
-                            <div className="mt-2 rounded-lg p-2 max-w-[100px]">
+                            <div className="mt-2 p-2 max-w-[100px]">
                               <div className="flex space-x-1">
                                 <div className="w-2 h-2 bg-current rounded-full animate-bounce" />
                                 <div className="w-2 h-2 bg-current rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
@@ -614,7 +611,6 @@ export function AIChat() {
                 )
               })}
 
-              {/* 删除单独的加载状态行 */}
               <div ref={messagesEndRef} />
             </div>
           )}
