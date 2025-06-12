@@ -144,7 +144,7 @@ export function Sidebar() {
         {!sidebarCollapsed && (
           <div className="flex items-center space-x-3">
             <div className="w-8 h-8 flex items-center justify-center">
-              <img src="/static/logo.svg" alt="Magic Cube Logo" className="w-8 h-8" />
+              <img src="./logo.svg" alt="Magic Cube Logo" className="w-8 h-8" />
             </div>
             <div>
               <h1 className="text-lg font-bold magic-cube-text-gradient">
