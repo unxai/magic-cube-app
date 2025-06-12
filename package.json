@@ -1,6 +1,6 @@
 {
   "name": "magic-cube-app",
-  "version": "1.0.0",
+  "version": "0.0.1",
   "description": "一款基于本地 AI（Ollama）与 Elasticsearch 的智能开发辅助工具",
   "main": "dist-electron/main.js",
   "scripts": {

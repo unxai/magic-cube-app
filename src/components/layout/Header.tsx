@@ -3,8 +3,6 @@ import {
   Sun, 
   Moon, 
   Monitor, 
-  Wifi, 
-  WifiOff,
   Settings,
   User,
   RefreshCw

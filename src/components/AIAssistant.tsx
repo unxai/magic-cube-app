@@ -318,12 +318,9 @@ export function AIAssistant({
     setMessages(prev => [...prev, assistantMessage])
     
     try {
-      let currentContent = ''
-      
       // 智能查询流式更新回调函数
       const handleSmartQueryStreamUpdate = (streamContent: string) => {
         // 直接使用AI返回的内容，不显示调试信息
-        currentContent = streamContent
         
         // 使用函数式更新确保获取最新状态
         setMessages(prev => {
