@@ -1,7 +1,7 @@
 {
   "name": "magic-cube-app",
   "version": "0.0.1",
-  "description": "一款基于本地 AI（Ollama）与 Elasticsearch 的智能开发辅助工具",
+  "description": "一款集成AI聊天功能的Elasticsearch管理工具",
   "main": "dist-electron/main.js",
   "scripts": {
     "dev": "vite",

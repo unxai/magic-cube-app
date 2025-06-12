@@ -6,8 +6,7 @@ import {
   Settings, 
   Search,
   ChevronLeft,
-  ChevronRight,
-  Server
+  ChevronRight
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
@@ -43,11 +42,6 @@ const navItems: NavItem[] = [
     id: 'indices',
     label: '索引管理',
     icon: Database,
-  },
-  {
-    id: 'cluster-management',
-    label: '集群管理',
-    icon: Server,
   },
   {
     id: 'ai-chat',
@@ -151,7 +145,7 @@ export function Sidebar() {
                 Magic Cube
               </h1>
               <p className="text-xs text-muted-foreground">
-                智能数据查询工具
+                Elasticsearch管理工具
               </p>
             </div>
           </div>

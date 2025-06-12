@@ -34,12 +34,11 @@ export function Header() {
   const { theme, setTheme } = useTheme()
   const { activeTab } = useAppStore()
   const { 
-    isConnected: esConnected, 
     currentConnection, 
     clusterInfo,
     fetchClusterInfo,
     fetchIndices,
-    connect
+    testConnection
   } = useElasticsearchStore()
   const { 
     ollamaConnected, 
@@ -73,8 +72,11 @@ export function Header() {
           name: cluster.name,
           host: cluster.host,
           username: cluster.username,
+          password: cluster.password,
           status: cluster.status || 'disconnected',
-          clusterName: cluster.clusterName
+          clusterName: cluster.clusterName,
+          version: cluster.version,
+          nodeCount: cluster.nodeCount
         }))
       }
     } catch (error) {
@@ -134,33 +136,26 @@ export function Header() {
         updatedAt: new Date().toISOString()
       }
       
-      // 连接到集群
-      await connect(connectionConfig)
-      
-      // 保存当前集群ID
-      localStorage.setItem('current-cluster-id', cluster.id)
-      
-      // 更新本地集群状态
-      const savedClusters = localStorage.getItem('elasticsearch-clusters')
-      if (savedClusters) {
-        const clusters = JSON.parse(savedClusters)
-        const updatedClusters = clusters.map((c: any) => 
-          c.id === cluster.id ? { ...c, status: 'connected', lastConnected: new Date() } : c
-        )
-        localStorage.setItem('elasticsearch-clusters', JSON.stringify(updatedClusters))
-      }
+      // 使用共享的切换集群函数
+      await useElasticsearchStore.getState().switchCluster(connectionConfig)
       
     } catch (error) {
       console.error('切换集群失败:', error)
-      
-      // 更新失败状态
-      const savedClusters = localStorage.getItem('elasticsearch-clusters')
-      if (savedClusters) {
-        const clusters = JSON.parse(savedClusters)
-        const updatedClusters = clusters.map((c: any) => 
-          c.id === cluster.id ? { ...c, status: 'disconnected' } : c
-        )
-        localStorage.setItem('elasticsearch-clusters', JSON.stringify(updatedClusters))
+    }
+  }
+
+  /**
+   * 测试集群连接
+   * @param connection 要测试的连接配置
+   */
+  const handleTestConnection = async (connection: any) => {
+    try {
+      return await testConnection(connection)
+    } catch (error) {
+      console.error('测试连接失败:', error)
+      return {
+        success: false,
+        error: '测试连接失败: ' + (error instanceof Error ? error.message : '未知错误')
       }
     }
   }
@@ -191,7 +186,7 @@ export function Header() {
    * 刷新数据
    */
   const handleRefresh = async () => {
-    if (esConnected) {
+    if (currentConnection?.status === 'connected') {
       try {
         await Promise.all([
           fetchClusterInfo(),
@@ -247,15 +242,19 @@ export function Header() {
         <div className="flex items-center space-x-6">
           <ClusterSelector
             currentCluster={currentConnection ? {
-              id: currentConnection.id || 'default',
-              name: currentConnection.name || '默认集群',
+              id: currentConnection.id,
+              name: currentConnection.name,
               host: currentConnection.host,
               username: currentConnection.username,
-              status: esConnected ? 'connected' : 'disconnected',
-              clusterName: clusterInfo?.cluster_name
+              password: currentConnection.password,
+              status: currentConnection.status,
+              clusterName: clusterInfo?.cluster_name,
+              version: clusterInfo?.version?.number,
+              nodeCount: clusterInfo ? 1 : undefined
             } : undefined}
             clusters={getClusters()}
             onClusterChange={handleClusterChange}
+            onTestConnection={handleTestConnection}
           />
           <div className="h-6 w-px bg-border" />
           <h1 className="text-lg font-medium text-foreground">
@@ -312,7 +311,7 @@ export function Header() {
             size="icon"
             className="h-9 w-9"
             onClick={handleRefresh}
-            disabled={!esConnected}
+            disabled={currentConnection?.status !== 'connected'}
           >
             <RefreshCw className="h-4 w-4" />
           </Button>

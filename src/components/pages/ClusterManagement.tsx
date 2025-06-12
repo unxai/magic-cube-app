@@ -279,12 +279,8 @@ export function ClusterManagement() {
         updatedAt: new Date().toISOString()
       }
       
-      // 保存连接配置到 Elasticsearch Store
-      addConnection(connectionConfig)
-      
-      // 设置为当前连接并连接到集群
-      setCurrentConnection(connectionConfig)
-      await connect(connectionConfig)
+      // 使用共享的切换集群函数
+      await useElasticsearchStore.getState().switchCluster(connectionConfig)
       
       // 更新本地集群状态
       const updatedClusters = clusters.map(c => 

@@ -12,10 +12,9 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels'
-import { Play, Save, History, Edit, Trash2, MoreHorizontal, Copy, Download, Filter, RefreshCw, ChevronUp, ChevronDown, ChevronsUpDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Bot } from 'lucide-react'
+import { Play, Save, History, Edit, Trash2, MoreHorizontal, Copy, Download, Filter, RefreshCw, ChevronUp, ChevronDown, ChevronsUpDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react'
 import { useElasticsearchStore } from '@/stores/elasticsearch-store'
 import { useToast } from '@/hooks/use-toast'
-import { AIAssistant } from '@/components/AIAssistant'
 
 /**
  * 查询模板接口
@@ -116,12 +115,6 @@ export function SearchQuery() {
   // 可排序字段配置（基于字段类型判断）
   const [sortableFields, setSortableFields] = useState<Set<string>>(new Set())
 
-  // AI助手弹层状态
-  const [isAIDialogOpen, setIsAIDialogOpen] = useState(false)
-  
-  // 错误状态
-  const [lastError, setLastError] = useState<string>('')
-
   const { indices, executeQuery, getIndexMapping } = useElasticsearchStore()
   const { toast } = useToast()
 
@@ -153,7 +146,7 @@ export function SearchQuery() {
 
   /**
    * 初始化默认查询
-   * 智能检查索引映射，如果存在@timestamp字段则添加排序，并检测可排序字段
+   * 检查索引映射，如果存在@timestamp字段则添加排序，并检测可排序字段
    */
   const initializeDefaultQuery = async () => {
     const defaultQuery: any = {
@@ -344,9 +337,6 @@ export function SearchQuery() {
 
       const updatedResults = [queryResult, ...queryResults]
       saveQueryResults(updatedResults)
-      
-      // 清空错误状态
-      setLastError('')
 
       toast({
         title: '查询成功',
@@ -371,9 +361,6 @@ export function SearchQuery() {
 
       const updatedResults = [queryResult, ...queryResults]
       saveQueryResults(updatedResults)
-      
-      // 设置错误状态
-      setLastError(error.message || '查询执行失败')
 
       toast({
         title: '查询失败',
@@ -871,34 +858,7 @@ export function SearchQuery() {
               </DialogFooter>
             </DialogContent>
           </Dialog>
-          <Dialog open={isAIDialogOpen} onOpenChange={setIsAIDialogOpen}>
-            <DialogTrigger asChild>
-              <Button variant="outline" size="sm">
-                <Bot className="h-4 w-4 mr-2" />
-                AI助手
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-7xl w-[95vw] max-h-[90vh] overflow-hidden flex flex-col">
-              <DialogHeader>
-                <DialogTitle>AI智能助手</DialogTitle>
-                <DialogDescription>
-                  使用AI助手来优化查询、分析性能或诊断错误
-                </DialogDescription>
-              </DialogHeader>
-              <AIAssistant
-                currentQuery={queryBody}
-                queryResults={results}
-                onQueryOptimized={(optimizedQuery) => {
-                  setQueryBody(optimizedQuery)
-                  setIsAIDialogOpen(false)
-                }}
-                lastError={lastError}
-                showPerformanceAnalysis={!!results.length}
-                showErrorDiagnosis={!!lastError}
-                selectedIndex={selectedIndex}
-              />
-             </DialogContent>
-          </Dialog>
+
         </div>
       </div>
 

@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { Send, Bot, User, Trash2, Download, Copy, ChevronDown, ArrowUp, ArrowDown } from 'lucide-react'
+import { Send, Bot, User, Trash2, Download, Copy, ChevronDown, ArrowUp, ArrowDown, Brain } from 'lucide-react'
 import { useAIStore } from '@/stores/ai-store'
 
 import ReactMarkdown from 'react-markdown'
@@ -28,29 +28,106 @@ interface Message {
  */
 function ThinkSection({ thinkContent }: { thinkContent: string }) {
   return (
-    <ReactMarkdown
-      components={{
-        code({ node, className, children, ...props }) {
-          const match = /language-(\w+)/.exec(className || '')
-          return match ? (
-            <SyntaxHighlighter
-              style={tomorrow}
-              language={match[1]}
-              PreTag="div"
-              className="text-xs"
-            >
-              {String(children).replace(/\n$/, '')}
-            </SyntaxHighlighter>
-          ) : (
-            <code className={className} {...props}>
-              {children}
-            </code>
-          )
-        }
-      }}
-    >
-      {thinkContent}
-    </ReactMarkdown>
+    <div className="relative">
+      <div className="absolute top-0 right-0 p-1 opacity-30">
+        <Brain className="h-4 w-4" />
+      </div>
+      <ReactMarkdown
+        components={{
+          code({ node, className, children, ...props }) {
+            const match = /language-(\w+)/.exec(className || '')
+            return match ? (
+              <SyntaxHighlighter
+                style={tomorrow}
+                language={match[1]}
+                PreTag="div"
+                className="text-xs my-2"
+              >
+                {String(children).replace(/\n$/, '')}
+              </SyntaxHighlighter>
+            ) : (
+              <code className={`${className} bg-secondary/70 px-1 py-0.5 rounded`} {...props}>
+                {children}
+              </code>
+            )
+          },
+          table({ children, ...props }) {
+            return (
+              <div className="overflow-x-auto my-4">
+                <table className="min-w-full border-collapse border border-border" {...props}>
+                  {children}
+                </table>
+              </div>
+            )
+          },
+          thead({ children, ...props }) {
+            return (
+              <thead className="bg-muted" {...props}>
+                {children}
+              </thead>
+            )
+          },
+          tbody({ children, ...props }) {
+            return (
+              <tbody {...props}>
+                {children}
+              </tbody>
+            )
+          },
+          tr({ children, ...props }) {
+            return (
+              <tr className="border-b border-border hover:bg-muted/50" {...props}>
+                {children}
+              </tr>
+            )
+          },
+          th({ children, ...props }) {
+            return (
+              <th className="border border-border px-3 py-2 text-left font-semibold" {...props}>
+                {children}
+              </th>
+            )
+          },
+          td({ children, ...props }) {
+            return (
+              <td className="border border-border px-3 py-2" {...props}>
+                {children}
+              </td>
+            )
+          },
+          blockquote({ children, ...props }) {
+            return (
+              <blockquote className="border-l-4 border-primary/50 pl-4 my-4 italic text-muted-foreground" {...props}>
+                {children}
+              </blockquote>
+            )
+          },
+          ul({ children, ...props }) {
+            return (
+              <ul className="list-disc list-inside my-2 space-y-1" {...props}>
+                {children}
+              </ul>
+            )
+          },
+          ol({ children, ...props }) {
+            return (
+              <ol className="list-decimal list-inside my-2 space-y-1" {...props}>
+                {children}
+              </ol>
+            )
+          },
+          li({ children, ...props }) {
+            return (
+              <li className="ml-2" {...props}>
+                {children}
+              </li>
+            )
+          }
+        }}
+      >
+        {thinkContent}
+      </ReactMarkdown>
+    </div>
   )
 }
 
@@ -69,14 +146,86 @@ function MarkdownMessage({ content }: { content: string }) {
                 style={tomorrow}
                 language={match[1]}
                 PreTag="div"
-                className="text-sm"
+                className="text-xs my-2"
               >
                 {String(children).replace(/\n$/, '')}
               </SyntaxHighlighter>
             ) : (
-              <code className={className} {...props}>
+              <code className={`${className} bg-secondary/70 px-1 py-0.5 rounded`} {...props}>
                 {children}
               </code>
+            )
+          },
+          table({ children, ...props }) {
+            return (
+              <div className="overflow-x-auto my-4">
+                <table className="min-w-full border-collapse border border-border" {...props}>
+                  {children}
+                </table>
+              </div>
+            )
+          },
+          thead({ children, ...props }) {
+            return (
+              <thead className="bg-muted" {...props}>
+                {children}
+              </thead>
+            )
+          },
+          tbody({ children, ...props }) {
+            return (
+              <tbody {...props}>
+                {children}
+              </tbody>
+            )
+          },
+          tr({ children, ...props }) {
+            return (
+              <tr className="border-b border-border hover:bg-muted/50" {...props}>
+                {children}
+              </tr>
+            )
+          },
+          th({ children, ...props }) {
+            return (
+              <th className="border border-border px-3 py-2 text-left font-semibold" {...props}>
+                {children}
+              </th>
+            )
+          },
+          td({ children, ...props }) {
+            return (
+              <td className="border border-border px-3 py-2" {...props}>
+                {children}
+              </td>
+            )
+          },
+          blockquote({ children, ...props }) {
+            return (
+              <blockquote className="border-l-4 border-primary/50 pl-4 my-4 italic text-muted-foreground" {...props}>
+                {children}
+              </blockquote>
+            )
+          },
+          ul({ children, ...props }) {
+            return (
+              <ul className="list-disc list-inside my-2 space-y-1" {...props}>
+                {children}
+              </ul>
+            )
+          },
+          ol({ children, ...props }) {
+            return (
+              <ol className="list-decimal list-inside my-2 space-y-1" {...props}>
+                {children}
+              </ol>
+            )
+          },
+          li({ children, ...props }) {
+            return (
+              <li className="ml-2" {...props}>
+                {children}
+              </li>
             )
           }
         }}
@@ -96,6 +245,7 @@ export function AIChat() {
   const [messages, setMessages] = useState<Message[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [showScrollButtons, setShowScrollButtons] = useState(false)
+  const [expandedThinks, setExpandedThinks] = useState<Record<string, boolean>>({})
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const scrollAreaRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -139,12 +289,22 @@ export function AIChat() {
         }
       }))
       setMessages(convertedMessages)
+      
+      // 初始化新消息的思考过程为展开状态
+      const newExpandedState = { ...expandedThinks }
+      convertedMessages.forEach(msg => {
+        if (msg.role === 'assistant' && msg.metadata?.thinkContent && !Object.prototype.hasOwnProperty.call(expandedThinks, msg.id)) {
+          newExpandedState[msg.id] = true // 默认展开新消息的思考过程
+        }
+      })
+      setExpandedThinks(newExpandedState)
+      
       // 如果正在生成回复，自动滚动到底部
       if (isGenerating) {
         scrollToBottom()
       }
     }
-  }, [currentSession?.messages, currentSession?.updatedAt, isGenerating])
+  }, [currentSession?.messages, currentSession?.updatedAt, isGenerating, expandedThinks])
 
   // AI连接状态检查
   useEffect(() => {
@@ -291,6 +451,16 @@ export function AIChat() {
     })
   }
 
+  /**
+   * 切换思考过程的展开/折叠状态
+   */
+  const toggleThink = (id: string) => {
+    setExpandedThinks(prev => ({
+      ...prev,
+      [id]: !prev[id]
+    }))
+  }
+
   return (
     <div className="h-full flex flex-col relative">
       {/* 页面标题 */}
@@ -339,8 +509,7 @@ export function AIChat() {
                 const showAvatar = index === 0 || messages[index - 1].role !== msg.role
                 return (
                   <div key={msg.id} className="group">
-                    <div className={`flex items-start space-x-3 ${msg.role === 'user' ? 'flex-row-reverse space-x-reverse' : ''
-                      }`}>
+                    <div className={`flex items-start space-x-3 ${msg.role === 'user' ? 'flex-row-reverse space-x-reverse' : ''}`}>
                       {/* 头像 - 只在角色切换时显示 */}
                       {showAvatar ? (
                         <Avatar className="w-8 h-8 flex-shrink-0">
@@ -356,32 +525,31 @@ export function AIChat() {
                         <div className="w-8 h-8 flex-shrink-0" />
                       )}
 
-                      <div className={`flex flex-col flex-1 ${msg.role === 'user' ? 'items-end' : 'items-start'
-                        }`}>
-                        <div className={`max-w-[85%] space-y-2 ${msg.role === 'user' ? 'min-w-[200px]' : 'min-w-[300px]'
-                          }`}>
+                      <div className={`flex flex-col flex-1 ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
+                        <div className={`max-w-[85%] space-y-2 ${msg.role === 'user' ? 'min-w-[200px]' : 'min-w-[300px]'}`}>
                           {/* Think 内容区域 */}
                           {msg.role === 'assistant' && msg.metadata?.thinkContent && (
                             <div className="group relative">
                             <div className="flex items-center gap-2 mb-2">
                               <div className="h-px flex-1 bg-muted-foreground/20" />
                               <Button
-                                variant="ghost"
+                                variant="outline"
                                 size="sm"
-                                className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground"
-                                onClick={() => {
-                                  const thinkEl = document.getElementById(`think-${msg.id}`);
-                                  if (thinkEl) {
-                                    thinkEl.classList.toggle('hidden');
-                                  }
-                                }}
+                                className="h-6 px-2 text-xs bg-secondary/30 hover:bg-secondary/50 border-secondary"
+                                onClick={() => toggleThink(msg.id)}
                               >
-                                <ChevronDown className="h-3 w-3 mr-1" />
+                                {expandedThinks[msg.id] ? (
+                                  <ChevronDown className="h-3 w-3 mr-1 transition-transform duration-200" />
+                                ) : (
+                                  <ChevronDown className="h-3 w-3 mr-1 -rotate-90 transition-transform duration-200" />
+                                )}
                                 思考过程
                               </Button>
                               <div className="h-px flex-1 bg-muted-foreground/20" />
                             </div>
-                            <div id={`think-${msg.id}`} className="rounded-lg bg-secondary/50 p-3 text-sm text-muted-foreground">
+                            <div 
+                              className={`rounded-lg bg-secondary/50 p-3 text-sm text-muted-foreground border border-secondary/70 shadow-inner border-l-4 border-l-primary/70 overflow-hidden transition-all duration-300 ${expandedThinks[msg.id] ? 'max-h-[500px] opacity-100' : 'max-h-0 opacity-0 p-0 border-0'}`}
+                            >
                               <ThinkSection thinkContent={msg.metadata.thinkContent} />
                             </div>
                           </div>
@@ -390,7 +558,7 @@ export function AIChat() {
                           {/* 主要回答内容 */}
                           <div className={`rounded-lg p-4 ${msg.role === 'user'
                               ? 'bg-primary text-primary-foreground'
-                              : 'bg-muted'
+                              : 'bg-muted border border-secondary/70 shadow-inner border-l-4 border-l-primary/70'
                             }`}>
                             {msg.role === 'user' ? (
                               <p className="whitespace-pre-wrap break-words leading-relaxed">
@@ -399,17 +567,30 @@ export function AIChat() {
                             ) : (
                               <div className="prose prose-sm max-w-none dark:prose-invert">
                                 <div className="relative">
+                                  <div className="absolute top-0 right-0 p-1 opacity-30">
+                                    <Bot className="h-4 w-4" />
+                                  </div>
                                   <MarkdownMessage content={msg.content} />
                                 </div>
                               </div>
                             )}
 
                           </div>
+                          
+                          {/* 加载状态 - 放在文字下方 */}
+                          {(isLoading || isGenerating) && msg.role === 'assistant' && index === messages.length - 1 && (
+                            <div className="mt-2 rounded-lg p-2 max-w-[100px]">
+                              <div className="flex space-x-1">
+                                <div className="w-2 h-2 bg-current rounded-full animate-bounce" />
+                                <div className="w-2 h-2 bg-current rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
+                                <div className="w-2 h-2 bg-current rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
+                              </div>
+                            </div>
+                          )}
                         </div>
 
                         {/* 消息元信息 */}
-                        <div className={`flex items-center mt-2 space-x-2 ${msg.role === 'user' ? 'flex-row-reverse space-x-reverse' : ''
-                          }`}>
+                        <div className={`flex items-center mt-2 space-x-2 ${msg.role === 'user' ? 'flex-row-reverse space-x-reverse' : ''}`}>
                           <span className="text-xs text-muted-foreground">
                             {formatTime(msg.timestamp)}
                           </span>
@@ -433,25 +614,7 @@ export function AIChat() {
                 )
               })}
 
-              {/* 加载状态 */}
-              {(isLoading || isGenerating) && (
-                <div className="flex items-start space-x-3">
-                  <Avatar className="w-8 h-8">
-                    <AvatarFallback>
-                      <Bot className="h-4 w-4" />
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1">
-                    <div className="bg-muted rounded-lg p-4 max-w-[300px]">
-                      <div className="flex space-x-1">
-                        <div className="w-2 h-2 bg-current rounded-full animate-bounce" />
-                        <div className="w-2 h-2 bg-current rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
-                        <div className="w-2 h-2 bg-current rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
+              {/* 删除单独的加载状态行 */}
               <div ref={messagesEndRef} />
             </div>
           )}

@@ -2,7 +2,6 @@ import { useAppStore } from '@/stores/app-store'
 import { Dashboard } from '@/components/pages/Dashboard'
 import { SearchQuery } from '@/components/pages/SearchQuery'
 import { IndexManagement } from '@/components/pages/IndexManagement'
-import { ClusterManagement } from '@/components/pages/ClusterManagement'
 import { AIChat } from '@/components/pages/AIChat'
 import { Settings } from '@/components/pages/Settings'
 
@@ -24,8 +23,6 @@ export function MainContent() {
         return <SearchQuery />
       case 'indices':
         return <IndexManagement />
-      case 'cluster-management':
-        return <ClusterManagement />
       case 'ai-chat':
         return <AIChat />
       case 'settings':

@@ -327,6 +327,35 @@ ipcMain.handle('elasticsearch:get-index-mapping', async (_event, connection: Ela
   }
 })
 
+/**
+ * 获取节点信息
+ */
+ipcMain.handle('elasticsearch:get-nodes-info', async (_event, connection: ElasticsearchConnection) => {
+  try {
+    const client = createElasticsearchClient(connection)
+    // 获取节点基本信息
+    const info = await client.nodes.info()
+    // 获取节点统计信息
+    const stats = await client.nodes.stats()
+    
+    // 合并节点信息和统计信息
+    const nodes: { [key: string]: any } = {}
+    if (info.nodes && stats.nodes) {
+      Object.entries(info.nodes).forEach(([nodeId, nodeInfo]) => {
+        const nodeStats = stats.nodes[nodeId]
+        nodes[nodeId] = {
+          ...nodeInfo,
+          stats: nodeStats
+        }
+      })
+    }
+    
+    return { nodes }
+  } catch (error) {
+    throw new Error('获取节点信息失败: ' + (error instanceof Error ? error.message : '未知错误'))
+  }
+})
+
 // 防止多个实例
 const gotTheLock = app.requestSingleInstanceLock()
 

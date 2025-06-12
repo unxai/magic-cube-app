@@ -4,16 +4,16 @@
   <img src="static/logo.svg" alt="Magic Cube App Logo" width="120" height="120">
 </div>
 
-🎯 **基于本地 Ollama AI 的 Elasticsearch 智能助手**
+🎯 **Elasticsearch管理工具，集成AI聊天功能**
 
-通过自然语言对话操作 Elasticsearch，自动生成 DSL 查询，让数据操作更简单。
+一款功能全面的Elasticsearch管理工具，集成了AI聊天辅助功能，让数据操作更简单。
 
 ## ✨ 特性
 
-- 🤖 自然语言生成 Elasticsearch DSL 查询
 - 🔍 多集群管理和连接
 - 📈 查询结果可视化
-- 🛡️ 本地 AI，保护数据隐私
+- 💬 AI聊天辅助功能
+- 🛡️ 本地运行，保护数据隐私
 - 💻 跨平台桌面应用
 
 ## 📸 应用截图
@@ -58,9 +58,9 @@ npm run build
    - 输入 ES 地址和认证信息
    - 测试连接
 
-3. **对话操作**
+3. **使用AI聊天**
    ```
-   "查询最近7天的错误日志" → 自动生成 DSL 查询
+   可以向AI助手询问Elasticsearch相关问题
    ```
 
 ## 📄 许可证

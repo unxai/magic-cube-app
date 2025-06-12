@@ -3,15 +3,14 @@ import {
   Database, 
   Activity, 
   HardDrive, 
-  Zap,
   TrendingUp,
-  FileText
+  FileText,
+  Server
 } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { useElasticsearchStore } from '@/stores/elasticsearch-store'
-import { useAIStore } from '@/stores/ai-store'
 import { useAppStore } from '@/stores/app-store'
 import { formatNumber } from '@/lib/utils'
 
@@ -60,20 +59,16 @@ function StatCard({ title, value, description, icon: Icon, trend }: StatCardProp
 
 /**
  * 仪表板页面组件
- * 显示 Elasticsearch 集群状态、AI 模型状态和系统概览
+ * 显示 Elasticsearch 集群状态和系统概览
  */
 export function Dashboard() {
   const { 
-    isConnected, 
+    currentConnection,
     clusterInfo, 
-    indices, 
-    currentConnection 
+    indices,
+    nodesInfo,
+    fetchNodesInfo
   } = useElasticsearchStore()
-  const { 
-    ollamaConnected, 
-    currentModel, 
-    sessions 
-  } = useAIStore()
 
   /**
    * 计算总文档数
@@ -97,18 +92,44 @@ export function Dashboard() {
     return indices.filter(index => index.health === 'green').length
   }, [indices])
 
+  /**
+   * 获取节点数量
+   */
+  const nodeCount = React.useMemo(() => {
+    return nodesInfo ? Object.keys(nodesInfo.nodes || {}).length : 0
+  }, [nodesInfo])
+
+  /**
+   * 刷新节点信息
+   */
+  React.useEffect(() => {
+    if (currentConnection?.status === 'connected' && !nodesInfo) {
+      fetchNodesInfo()
+    }
+  }, [currentConnection?.status, nodesInfo, fetchNodesInfo])
+
   return (
-    <div className="p-6 space-y-6">
-      {/* 页面标题 */}
-      <div className="space-y-2">
-        <h1 className="text-3xl font-bold tracking-tight">仪表板</h1>
-        <p className="text-muted-foreground">
-          查看 Elasticsearch 集群状态和 AI 助手概览
-        </p>
+    <div className="p-6 space-y-8">
+      {/* 页面标题和状态栏 */}
+      <div className="flex justify-between items-center">
+        <div className="space-y-1">
+          <h1 className="text-3xl font-bold tracking-tight">仪表板</h1>
+          <p className="text-muted-foreground">
+            查看 Elasticsearch 集群状态和系统概览
+          </p>
+        </div>
+        {currentConnection?.status === 'connected' && (
+          <Badge 
+            variant="default"
+            className="px-4 py-1 text-sm"
+          >
+            集群已连接
+          </Badge>
+        )}
       </div>
 
       {/* 连接状态卡片 */}
-      {!isConnected && (
+      {(!currentConnection || currentConnection.status !== 'connected') && (
         <Card className="border-orange-200 bg-orange-50 dark:border-orange-800 dark:bg-orange-950">
           <CardHeader>
             <CardTitle className="text-orange-800 dark:text-orange-200">
@@ -121,7 +142,6 @@ export function Dashboard() {
           <CardContent>
             <Button 
               onClick={() => {
-                // 切换到集群管理页面
                 useAppStore.getState().setActiveTab('cluster-management');
               }}
               className="bg-orange-600 hover:bg-orange-700"
@@ -132,8 +152,8 @@ export function Dashboard() {
         </Card>
       )}
 
-      {/* 统计卡片网格 */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      {/* 主要统计指标 */}
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
         <StatCard
           title="索引数量"
           value={indices.length}
@@ -153,39 +173,40 @@ export function Dashboard() {
           icon={HardDrive}
         />
         <StatCard
-          title="AI 会话"
-          value={sessions.length}
-          description="AI 助手对话会话数"
-          icon={Zap}
+          title="节点数量"
+          value={nodeCount}
+          description="集群中的节点数"
+          icon={Server}
         />
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2">
+      {/* 详细信息卡片 */}
+      <div className="space-y-6">
         {/* 集群信息 */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <Activity className="h-5 w-5" />
+        <Card className="h-full">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center space-x-2 text-base font-semibold">
+              <Activity className="h-5 w-5 text-primary" />
               <span>集群状态</span>
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {isConnected && clusterInfo ? (
+            {currentConnection?.status === 'connected' && clusterInfo ? (
               <>
-                <div className="space-y-2">
-                  <div className="flex justify-between">
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center py-2 border-b">
                     <span className="text-sm text-muted-foreground">集群名称</span>
                     <span className="text-sm font-medium">{clusterInfo.cluster_name}</span>
                   </div>
-                  <div className="flex justify-between">
+                  <div className="flex justify-between items-center py-2 border-b">
                     <span className="text-sm text-muted-foreground">版本</span>
-                    <Badge variant="outline">{clusterInfo.version.number}</Badge>
+                    <Badge variant="outline" className="font-mono">{clusterInfo.version.number}</Badge>
                   </div>
-                  <div className="flex justify-between">
+                  <div className="flex justify-between items-center py-2 border-b">
                     <span className="text-sm text-muted-foreground">构建类型</span>
                     <span className="text-sm font-medium">{clusterInfo.version.build_type}</span>
                   </div>
-                  <div className="flex justify-between">
+                  <div className="flex justify-between items-center py-2 border-b">
                     <span className="text-sm text-muted-foreground">Lucene 版本</span>
                     <span className="text-sm font-medium">{clusterInfo.version.lucene_version}</span>
                   </div>
@@ -218,113 +239,107 @@ export function Dashboard() {
           </CardContent>
         </Card>
 
-        {/* AI 助手状态 */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <Zap className="h-5 w-5" />
-              <span>AI 助手</span>
+        {/* 节点状态 */}
+        <Card className="h-full">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center space-x-2 text-base font-semibold">
+              <Server className="h-5 w-5 text-primary" />
+              <span>节点状态</span>
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-muted-foreground">Ollama 状态</span>
-                <Badge variant={ollamaConnected ? "default" : "secondary"}>
-                  {ollamaConnected ? '已连接' : '未连接'}
-                </Badge>
-              </div>
-              
-              {currentModel && (
-                <>
-                  <div className="flex justify-between">
-                    <span className="text-sm text-muted-foreground">当前模型</span>
-                    <span className="text-sm font-medium">{currentModel.name}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-sm text-muted-foreground">模型ID</span>
-                    <span className="text-sm font-medium">{currentModel.id}</span>
-                  </div>
-                </>
-              )}
-              
-              <div className="flex justify-between">
-                <span className="text-sm text-muted-foreground">会话数量</span>
-                <span className="text-sm font-medium">{sessions.length}</span>
-              </div>
-            </div>
+          <CardContent className="space-y-6">
+            {currentConnection?.status === 'connected' && nodesInfo ? (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                  {Object.entries(nodesInfo.nodes || {}).map(([nodeId, nodeInfo]: [string, any]) => (
+                    <div key={nodeId} className={`p-4 rounded-xl hover:shadow-md transition-shadow ${(nodeInfo.roles?.includes('master') && nodeInfo.settings?.node?.master === 'true') ? 'bg-purple-50 dark:bg-purple-950/20 border-purple-200 dark:border-purple-800' : 'bg-card border'} border`}>
+                      <div className="flex justify-between items-center mb-3">
+                        <div className="flex items-center space-x-2">
+                          <Server className={`h-4 w-4 ${(nodeInfo.roles?.includes('master') && nodeInfo.settings?.node?.master === 'true') ? 'text-purple-600' : 'text-primary'}`} />
+                          <span className={`font-medium truncate ${(nodeInfo.roles?.includes('master') && nodeInfo.settings?.node?.master === 'true') ? 'text-purple-700 dark:text-purple-300' : ''}`}>{nodeInfo.name}</span>
+                        </div>
+                        {(nodeInfo.roles?.includes('master') && nodeInfo.settings?.node?.master === 'true') ? (
+                          <Badge variant="default" className="bg-purple-600 hover:bg-purple-700 shrink-0">
+                            主节点
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="border-purple-600 text-purple-600 shrink-0">
+                            数据节点
+                          </Badge>
+                        )}
+                      </div>
 
-            {!ollamaConnected && (
-              <div className="pt-4 border-t">
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  className="w-full"
-                  onClick={() => {
-                    // 切换到设置页面配置 Ollama
-                    useAppStore.getState().setActiveTab('settings');
-                  }}
-                >
-                  连接 Ollama
-                </Button>
+                      <div className="space-y-3 text-sm">
+                        <div className="grid grid-cols-2 gap-x-4 gap-y-2 p-2 rounded-lg bg-muted/50">
+                          <div className="space-y-2">
+                            <div>
+                              <span className="text-muted-foreground block text-xs">版本</span>
+                              <span className="font-medium truncate block">{nodeInfo.version}</span>
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground block text-xs">IP地址</span>
+                              <span className="font-medium truncate block">{nodeInfo.ip || nodeInfo.transport_address?.split(':')[0]}</span>
+                            </div>
+                          </div>
+                          <div className="space-y-2">
+                            <div>
+                              <span className="text-muted-foreground block text-xs">操作系统</span>
+                              <span className="font-medium truncate block">{nodeInfo.os?.name} {nodeInfo.os?.version}</span>
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground block text-xs">JVM</span>
+                              <span className="font-medium truncate block">{nodeInfo.jvm?.version?.split('(')[0]}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-x-4 gap-y-2 p-2 rounded-lg bg-muted/50">
+                          <div className="space-y-2">
+                            <div>
+                              <span className="text-muted-foreground block text-xs">CPU使用率</span>
+                              <span className="font-medium">{nodeInfo.stats?.process?.cpu?.percent || 'N/A'}%</span>
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground block text-xs">内存使用</span>
+                              <span className="font-medium">{nodeInfo.stats?.process?.mem?.resident_in_bytes ? `${(nodeInfo.stats.process.mem.resident_in_bytes / (1024 * 1024 * 1024)).toFixed(2)} GB` : 'N/A'}</span>
+                            </div>
+                          </div>
+                          <div className="space-y-2">
+                            <div>
+                              <span className="text-muted-foreground block text-xs">磁盘使用</span>
+                              <span className="font-medium truncate block">{nodeInfo.stats?.fs?.total?.total_in_bytes ? `${((nodeInfo.stats.fs.total.total_in_bytes - nodeInfo.stats.fs.total.free_in_bytes) / (1024 * 1024 * 1024)).toFixed(2)} GB / ${(nodeInfo.stats.fs.total.total_in_bytes / (1024 * 1024 * 1024)).toFixed(2)} GB` : 'N/A'}</span>
+                            </div>
+                            <div>
+                              <span className="text-muted-foreground block text-xs">堆内存</span>
+                              <span className="font-medium truncate block">{nodeInfo.stats?.jvm?.mem?.heap_used_in_bytes ? `${(nodeInfo.stats.jvm.mem.heap_used_in_bytes / (1024 * 1024 * 1024)).toFixed(2)} GB / ${(nodeInfo.stats.jvm.mem.heap_max_in_bytes / (1024 * 1024 * 1024)).toFixed(2)} GB` : 'N/A'}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                
+                <div className="pt-4 border-t">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="w-full"
+                    onClick={() => fetchNodesInfo()}
+                  >
+                    刷新节点信息
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <div className="text-center py-8">
+                <Server className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                <p className="text-sm text-muted-foreground">未获取到节点信息</p>
               </div>
             )}
           </CardContent>
         </Card>
       </div>
-
-      {/* 索引概览 */}
-      {indices.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>索引概览</CardTitle>
-            <CardDescription>
-              显示前 5 个索引的基本信息
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {indices.slice(0, 5).map((index) => (
-                <div key={index.index} className="flex items-center justify-between p-3 border rounded-lg">
-                  <div className="flex items-center space-x-3">
-                    <div className={`w-3 h-3 rounded-full ${
-                      index.health === 'green' ? 'bg-green-500' :
-                      index.health === 'yellow' ? 'bg-yellow-500' : 'bg-red-500'
-                    }`} />
-                    <div>
-                      <p className="font-medium">{index.index}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {formatNumber(index['docsCount'])} 文档
-                      </p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm font-medium">{index.storeSize}</p>
-                    <Badge variant="outline" className="text-xs">
-                      {index.status}
-                    </Badge>
-                  </div>
-                </div>
-              ))}
-              
-              {indices.length > 5 && (
-                <div className="text-center pt-2">
-                  <Button 
-                  variant="outline" 
-                  className="w-full"
-                  onClick={() => {
-                    // 切换到索引管理页面
-                    useAppStore.getState().setActiveTab('indices');
-                  }}
-                >
-                  查看全部 {indices.length} 个索引
-                </Button>
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      )}
     </div>
   )
 }

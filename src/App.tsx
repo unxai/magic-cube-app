@@ -45,7 +45,7 @@ function App() {
    */
   const checkAndRestoreConnections = async () => {
     try {
-      const { currentConnection, isConnected, connect, setCurrentConnection } = useElasticsearchStore.getState()
+      const { currentConnection, connect, setCurrentConnection } = useElasticsearchStore.getState()
       const { ollamaConnected, ollamaHost, ollamaPort, connectToOllama } = useAIStore.getState()
       
       // 检查是否有保存的当前集群ID
@@ -112,8 +112,8 @@ function App() {
         }
       }
       
-      // 如果有当前连接但显示未连接，尝试重新连接
-      if (currentConnection && !isConnected) {
+      // 如果有当前连接但状态不是已连接，尝试重新连接
+      if (currentConnection && currentConnection.status !== 'connected') {
         try {
           await connect(currentConnection)
           console.log('已恢复 Elasticsearch 连接')

@@ -53,6 +53,62 @@ export interface ClusterInfo {
 /**
  * 索引信息
  */
+/**
+ * 节点信息
+ */
+export interface NodesInfo {
+  _nodes: {
+    total: number
+    successful: number
+    failed: number
+  }
+  cluster_name: string
+  nodes: {
+    [key: string]: {
+      name: string
+      version: string
+      ip: string
+      transport_address?: string
+      roles: string[]
+      settings?: {
+        node?: {
+          master?: string
+        }
+      }
+      os?: {
+        name?: string
+        version?: string
+      }
+      jvm?: {
+        version?: string
+        mem?: {
+          heap_used_in_bytes?: number
+          heap_max_in_bytes?: number
+        }
+      }
+      stats?: {
+        process?: {
+          cpu?: {
+            percent?: number
+          }
+          mem?: {
+            resident_in_bytes?: number
+          }
+        }
+        fs?: {
+          total?: {
+            total_in_bytes?: number
+            free_in_bytes?: number
+          }
+        }
+      }
+    }
+  }
+}
+
+/**
+ * 索引信息
+ */
 export interface IndexInfo {
   index: string
   health: 'green' | 'yellow' | 'red'
@@ -71,21 +127,23 @@ export interface IndexInfo {
 interface ElasticsearchState {
   // 连接配置
   connections: ElasticsearchConnection[]
-  currentConnection: ElasticsearchConnection | null
-  
+  currentConnection: (ElasticsearchConnection & { status: 'connected' | 'disconnected' | 'error' | 'testing' }) | null
+
   // 连接状态
-  isConnected: boolean
   isConnecting: boolean
   isLoading: boolean
   connectionError: string | null
-  
+
   // 集群信息
   clusterInfo: ClusterInfo | null
-  
+
+  // 节点信息
+  nodesInfo: NodesInfo | null
+
   // 索引信息
   indices: IndexInfo[]
   selectedIndex: string | null
-  
+
   // 查询历史
   queryHistory: Array<{
     id: string
@@ -105,7 +163,7 @@ interface ElasticsearchActions {
   updateConnection: (id: string, updates: Partial<ElasticsearchConnection>) => void
   deleteConnection: (id: string) => void
   setCurrentConnection: (connection: ElasticsearchConnection | null) => void
-  
+
   // 连接操作
   connect: (connection: ElasticsearchConnection) => Promise<void>
   disconnect: () => void
@@ -116,11 +174,13 @@ interface ElasticsearchActions {
     clusterName?: string
     error?: string
   }>
-  
+  switchCluster: (connection: ElasticsearchConnection) => Promise<boolean>
+
   // 集群操作
   fetchClusterInfo: () => Promise<void>
   fetchIndices: () => Promise<void>
-  
+  fetchNodesInfo: () => Promise<void>
+
   // 索引操作
   setSelectedIndex: (index: string | null) => void
   executeQuery: (index: string, queryBody: any) => Promise<any>
@@ -129,11 +189,11 @@ interface ElasticsearchActions {
   getIndexSettings: (indexName: string) => Promise<any>
   getIndexMapping: (indexName: string) => Promise<any>
   refreshIndices: () => Promise<void>
-  
+
   // 查询历史
   addToHistory: (query: string, index?: string, results?: any) => void
   clearHistory: () => void
-  
+
   // 错误处理
   setConnectionError: (error: string | null) => void
   clearError: () => void
@@ -150,11 +210,11 @@ export type ElasticsearchStore = ElasticsearchState & ElasticsearchActions
 const initialState: ElasticsearchState = {
   connections: [],
   currentConnection: null,
-  isConnected: false,
   isConnecting: false,
   isLoading: false,
   connectionError: null,
   clusterInfo: null,
+  nodesInfo: null,
   indices: [],
   selectedIndex: null,
   queryHistory: [],
@@ -176,7 +236,7 @@ export const useElasticsearchStore = create<ElasticsearchStore>()(
   persist(
     (set, get) => ({
       ...initialState,
-      
+
       // 连接管理
       addConnection: (connectionData) => {
         const connection: ElasticsearchConnection = {
@@ -185,85 +245,93 @@ export const useElasticsearchStore = create<ElasticsearchStore>()(
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         }
-        
+
         set((state) => ({
           connections: [...state.connections, connection]
         }))
       },
-      
+
       updateConnection: (id, updates) => {
         set((state) => ({
-          connections: state.connections.map(conn => 
-            conn.id === id 
+          connections: state.connections.map(conn =>
+            conn.id === id
               ? { ...conn, ...updates, updatedAt: new Date().toISOString() }
               : conn
           )
         }))
       },
-      
+
       deleteConnection: (id) => {
         set((state) => {
           const newConnections = state.connections.filter(conn => conn.id !== id)
-          const newCurrentConnection = state.currentConnection?.id === id 
-            ? null 
+          const newCurrentConnection = state.currentConnection?.id === id
+            ? null
             : state.currentConnection
-          
+
           return {
             connections: newConnections,
             currentConnection: newCurrentConnection,
-            isConnected: newCurrentConnection ? state.isConnected : false,
           }
         })
       },
-      
-      setCurrentConnection: (connection) => {
-        set({ currentConnection: connection })
+
+      setCurrentConnection: (connection: ElasticsearchConnection | null) => {
+        set({ currentConnection: connection ? { ...connection, status: 'disconnected' } : null })
       },
-      
+
       // 连接操作
       connect: async (connection) => {
+        // 如果当前已有连接，先断开
+        if (get().currentConnection?.status === 'connected') {
+          get().disconnect()
+        }
+
         set({ isConnecting: true, connectionError: null })
-        
+
         try {
           // 使用 Electron API 测试连接
           const elasticsearchAPI = getElasticsearchAPI()
           const pingResult = await elasticsearchAPI.ping(connection)
-          
+
           if (!pingResult) {
             throw new Error('无法连接到 Elasticsearch 服务器')
           }
-          
+
           set({
-            currentConnection: connection,
-            isConnected: true,
+            currentConnection: { ...connection, status: 'connected' },
             isConnecting: false,
             connectionError: null,
           })
-          
+
           // 连接成功后获取集群信息
           await get().fetchClusterInfo()
           await get().fetchIndices()
-          
+          await get().fetchNodesInfo()
+
         } catch (error) {
           set({
             isConnecting: false,
             connectionError: error instanceof Error ? error.message : '连接失败',
           })
+          // 连接失败时清除当前连接
+          set({
+            currentConnection: { ...connection, status: 'error' },
+          })
           throw error
         }
       },
-      
+
       disconnect: () => {
-        set({
-          isConnected: false,
-          currentConnection: null,
+        set(state => ({
+          currentConnection: state.currentConnection ? { ...state.currentConnection, status: 'disconnected' } : null,
           clusterInfo: null,
+          nodesInfo: null,
           indices: [],
           selectedIndex: null,
           connectionError: null,
-        })
+        }))
       },
-      
+
       testConnection: async (connection) => {
         try {
           const elasticsearchAPI = getElasticsearchAPI()
@@ -275,7 +343,52 @@ export const useElasticsearchStore = create<ElasticsearchStore>()(
           }
         }
       },
-      
+
+      /**
+       * 切换到指定集群
+       * 先断开当前连接，然后连接到新集群
+       */
+      switchCluster: async (connection: ElasticsearchConnection) => {
+        const { currentConnection, disconnect, connect } = get();
+        
+        // 如果当前有连接，先断开
+        if (currentConnection?.status === 'connected') {
+          disconnect();
+        }
+        
+        // 连接到新集群
+        try {
+          await connect(connection);
+          
+          // 保存当前集群ID到本地存储
+          localStorage.setItem('current-cluster-id', connection.id);
+          
+          // 更新本地集群状态
+          const savedClusters = localStorage.getItem('elasticsearch-clusters');
+          if (savedClusters) {
+            const clusters = JSON.parse(savedClusters);
+            const updatedClusters = clusters.map((c: any) => 
+              c.id === connection.id ? { ...c, status: 'connected', lastConnected: new Date() } : c
+            );
+            localStorage.setItem('elasticsearch-clusters', JSON.stringify(updatedClusters));
+          }
+          
+          return true;
+        } catch (error) {
+          // 更新失败状态
+          const savedClusters = localStorage.getItem('elasticsearch-clusters');
+          if (savedClusters) {
+            const clusters = JSON.parse(savedClusters);
+            const updatedClusters = clusters.map((c: any) => 
+              c.id === connection.id ? { ...c, status: 'disconnected' } : c
+            );
+            localStorage.setItem('elasticsearch-clusters', JSON.stringify(updatedClusters));
+          }
+          
+          throw error;
+        }
+      },
+
       // 集群操作
       fetchClusterInfo: async () => {
         try {
@@ -283,16 +396,56 @@ export const useElasticsearchStore = create<ElasticsearchStore>()(
           if (!connection) {
             throw new Error('未连接到 Elasticsearch')
           }
-          
+
           const elasticsearchAPI = getElasticsearchAPI()
           const response = await elasticsearchAPI.getClusterInfo(connection)
-          
+
           set({ clusterInfo: response as ClusterInfo })
         } catch (error) {
           console.error('获取集群信息失败:', error)
         }
       },
-      
+
+      fetchNodesInfo: async () => {
+        try {
+          const connection = get().currentConnection
+          if (!connection) {
+            throw new Error('未连接到 Elasticsearch')
+          }
+
+          const elasticsearchAPI = getElasticsearchAPI()
+          const response = await elasticsearchAPI.getNodesInfo(connection) as unknown as { nodes: { [key: string]: any } }
+
+          // 确保节点信息中包含 CPU 和内存使用率
+          if (response && response.nodes) {
+            Object.values(response.nodes).forEach((node: any) => {
+              if (!node.stats?.process?.cpu?.percent) {
+                node.stats = {
+                  ...node.stats,
+                  process: {
+                    ...node.stats?.process,
+                    cpu: { percent: 0 }
+                  }
+                }
+              }
+              if (!node.stats?.process?.mem?.resident_in_bytes) {
+                node.stats = {
+                  ...node.stats,
+                  process: {
+                    ...node.stats?.process,
+                    mem: { resident_in_bytes: 0 }
+                  }
+                }
+              }
+            })
+          }
+
+          set({ nodesInfo: response as NodesInfo })
+        } catch (error) {
+          console.error('获取节点信息失败:', error)
+        }
+      },
+
       fetchIndices: async () => {
         set({ isLoading: true })
         try {
@@ -300,10 +453,10 @@ export const useElasticsearchStore = create<ElasticsearchStore>()(
           if (!connection) {
             throw new Error('未连接到 Elasticsearch')
           }
-          
+
           const elasticsearchAPI = getElasticsearchAPI()
           const indices = await elasticsearchAPI.getIndices(connection)
-          
+
           set({ indices })
         } catch (error) {
           console.error('获取索引信息失败:', error)
@@ -311,56 +464,56 @@ export const useElasticsearchStore = create<ElasticsearchStore>()(
           set({ isLoading: false })
         }
       },
-      
+
       // 索引操作
       setSelectedIndex: (index) => {
         set({ selectedIndex: index })
       },
-      
+
       createIndex: async (name, settings) => {
         try {
           const connection = get().currentConnection
           if (!connection) {
             throw new Error('未连接到 Elasticsearch')
           }
-          
+
           const elasticsearchAPI = getElasticsearchAPI()
           const result = await elasticsearchAPI.createIndex(connection, name, settings)
-          
+
           // 刷新索引列表
           await get().fetchIndices()
-          
+
           return result
         } catch (error) {
           console.error('创建索引失败:', error)
           throw error
         }
       },
-      
+
       deleteIndex: async (name) => {
         try {
           const connection = get().currentConnection
           if (!connection) {
             throw new Error('未连接到 Elasticsearch')
           }
-          
+
           const elasticsearchAPI = getElasticsearchAPI()
           const result = await elasticsearchAPI.deleteIndex(connection, name)
-          
+
           // 刷新索引列表
           await get().fetchIndices()
-          
+
           return result
         } catch (error) {
           console.error('删除索引失败:', error)
           throw error
         }
       },
-      
+
       refreshIndices: async () => {
         await get().fetchIndices()
       },
-      
+
       /**
        * 获取索引设置
        */
@@ -370,17 +523,17 @@ export const useElasticsearchStore = create<ElasticsearchStore>()(
           if (!connection) {
             throw new Error('未连接到 Elasticsearch')
           }
-          
+
           const elasticsearchAPI = getElasticsearchAPI()
           const result = await elasticsearchAPI.getIndexSettings(connection, indexName)
-          
+
           return result
         } catch (error) {
           console.error('获取索引设置失败:', error)
           throw error
         }
       },
-      
+
       /**
        * 获取索引映射
        */
@@ -390,17 +543,17 @@ export const useElasticsearchStore = create<ElasticsearchStore>()(
           if (!connection) {
             throw new Error('未连接到 Elasticsearch')
           }
-          
+
           const elasticsearchAPI = getElasticsearchAPI()
           const result = await elasticsearchAPI.getIndexMapping(connection, indexName)
-          
+
           return result
         } catch (error) {
           console.error('获取索引映射失败:', error)
           throw error
         }
       },
-      
+
       // 查询历史
       addToHistory: (query, index, results) => {
         const historyItem = {
@@ -410,44 +563,44 @@ export const useElasticsearchStore = create<ElasticsearchStore>()(
           index,
           results,
         }
-        
+
         set((state) => ({
           queryHistory: [historyItem, ...state.queryHistory.slice(0, 99)] // 保留最近100条
         }))
       },
-      
+
       executeQuery: async (index, queryBody) => {
         try {
           const connection = get().currentConnection
           if (!connection) {
             throw new Error('未连接到 Elasticsearch')
           }
-          
+
           // 确保 queryBody 是对象类型
           const queryObject = typeof queryBody === 'string' ? JSON.parse(queryBody) : queryBody
-          
+
           const elasticsearchAPI = getElasticsearchAPI()
           const result = await elasticsearchAPI.executeQuery(connection, index, queryObject)
-          
+
           // 添加到查询历史
           get().addToHistory(JSON.stringify(queryObject, null, 2), index, result)
-          
+
           return result
         } catch (error) {
           console.error('执行查询失败:', error)
           throw error
         }
       },
-      
+
       clearHistory: () => {
         set({ queryHistory: [] })
       },
-      
+
       // 错误处理
       setConnectionError: (error) => {
         set({ connectionError: error })
       },
-      
+
       clearError: () => {
         set({ connectionError: null })
       },
@@ -458,7 +611,6 @@ export const useElasticsearchStore = create<ElasticsearchStore>()(
       partialize: (state) => ({
         connections: state.connections,
         currentConnection: state.currentConnection,
-        isConnected: state.isConnected,
         queryHistory: state.queryHistory,
       }),
     }

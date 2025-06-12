@@ -36,6 +36,7 @@ declare global {
           clusterName?: string
           error?: string
         }>
+        getNodesInfo: (connection: ElasticsearchConnection) => Promise<any>
         getClusterInfo: (connection: ElasticsearchConnection) => Promise<any>
         getIndices: (connection: ElasticsearchConnection) => Promise<any[]>
         executeQuery: (connection: ElasticsearchConnection, index: string, queryBody: any) => Promise<any>
